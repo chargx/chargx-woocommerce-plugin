@@ -269,3 +269,4 @@ abstract class WC_Gateway_ChargX_Base extends WC_Payment_Gateway {
         return true;
     }
 }
+
