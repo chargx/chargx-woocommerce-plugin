@@ -2,6 +2,8 @@
 
 ChargX payment gateway for WooCommerce (Credit Cards + Apple Pay + Google Pay, refunds, recurring).
 
+Documentation https://docs.chargx.io/woocommerce
+
 ## How to install
 
 1. Open WordPress Admin Dashboard
