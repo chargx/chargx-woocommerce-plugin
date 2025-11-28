@@ -56,6 +56,7 @@ add_action( 'plugins_loaded', 'chargx_wc_init', 20 );
 function chargx_wc_register_gateways( $gateways ) {
     $gateways[] = 'WC_Gateway_ChargX_Card';
     $gateways[] = 'WC_Gateway_ChargX_ApplePay';
+    $gateways[] = 'WC_Gateway_ChargX_GooglePay';
 
     return $gateways;
 }
