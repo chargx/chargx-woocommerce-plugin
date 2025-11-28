@@ -20,6 +20,18 @@ class WC_Gateway_ChargX_GooglePay extends WC_Gateway_ChargX_Base {
     }
 
     /**
+     * Extra settings specific to Google Pay.
+     */
+    public function init_form_fields() {
+        parent::init_form_fields();
+
+        // Override the title default value from parent
+        if ( isset( $this->form_fields['title'] ) ) {
+            $this->form_fields['title']['default'] = __( 'Google Pay', 'chargx-woocommerce' );
+        }
+    }
+
+    /**
      * GooglePay payment fields: only a button & notice, real UI is handled via JS + PaymentRequest.
      */
     public function payment_fields() {

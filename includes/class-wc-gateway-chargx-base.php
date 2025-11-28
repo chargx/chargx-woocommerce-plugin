@@ -103,7 +103,7 @@ abstract class WC_Gateway_ChargX_Base extends WC_Payment_Gateway {
                 'title'       => __( 'Title', 'chargx-woocommerce' ),
                 'type'        => 'text',
                 'description' => __( 'Title seen by customers at checkout.', 'chargx-woocommerce' ),
-                'default'     => __( 'Credit Card (ChargX)', 'chargx-woocommerce' ),
+                'default'     => __( 'Credit Card', 'chargx-woocommerce' ),
                 'desc_tip'    => true,
             ),
             'description' => array(
