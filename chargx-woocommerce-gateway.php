@@ -1,9 +1,9 @@
 <?php
 /**
  * Plugin Name: ChargX Payment Gateway for WooCommerce
- * Description: Modern ChargX payment gateway for WooCommerce (Credit Cards + Apple Pay, refunds, recurring).
- * Author: Your Name
- * Version: 1.0.0
+ * Description: Modern ChargX payment gateway for WooCommerce (Credit Cards + Apple/Google Pay, refunds, recurring).
+ * Author: ChargX
+ * Version: 0.11.0
  * Requires at least: 5.8
  * Requires PHP: 7.4
  * WC requires at least: 4.0
@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'CHARGX_WC_VERSION', '1.0.0' );
+define( 'CHARGX_WC_VERSION', '1.1.0' );
 define( 'CHARGX_WC_PLUGIN_FILE', __FILE__ );
 define( 'CHARGX_WC_PLUGIN_PATH', plugin_dir_path( __FILE__ ) );
 define( 'CHARGX_WC_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
@@ -95,6 +95,8 @@ function chargx_wc_enqueue_assets() {
     $card_gateway     = isset( $gateways['chargx_card'] ) ? $gateways['chargx_card'] : null;
     /** @var WC_Gateway_ChargX_ApplePay|null $apple_gateway */
     $apple_gateway    = isset( $gateways['chargx_applepay'] ) ? $gateways['chargx_applepay'] : null;
+    /** @var WC_Gateway_ChargX_GooglePay|null $google_gateway */
+    $google_gateway    = isset( $gateways['chargx_googlepay'] ) ? $gateways['chargx_googlepay'] : null;
 
     $cart_total = 0;
     if ( function_exists( 'WC' ) && WC()->cart ) {
@@ -106,14 +108,17 @@ function chargx_wc_enqueue_assets() {
         'checkout_url'       => WC_AJAX::get_endpoint( 'checkout' ),
         'card_gateway_id'    => 'chargx_card',
         'apple_gateway_id'   => 'chargx_applepay',
+        'google_gateway_id'  => 'chargx_googlepay',
         'is_checkout'        => is_checkout() ? 'yes' : 'no',
         'is_pay_for_order'   => is_checkout_pay_page() ? 'yes' : 'no',
         'cart_total'         => $cart_total,
         'currency'           => get_woocommerce_currency(),
         'card_publishable'   => $card_gateway ? $card_gateway->get_publishable_key() : '',
         'apple_publishable'  => $apple_gateway ? $apple_gateway->get_publishable_key() : '',
+        'google_publishable' => $google_gateway ? $google_gateway->get_publishable_key() : '',
         'card_testmode'      => $card_gateway && 'yes' === $card_gateway->get_option( 'testmode', 'no' ) ? 'yes' : 'no',
         'apple_testmode'     => $apple_gateway && 'yes' === $apple_gateway->get_option( 'testmode', 'no' ) ? 'yes' : 'no',
+        'google_testmode'    => $google_gateway && 'yes' === $google_gateway->get_option( 'testmode', 'no' ) ? 'yes' : 'no',
         'i18n'               => array(
             'card_error'       => __( 'Unable to process your card. Please check the details and try again.', 'chargx-woocommerce' ),
             'card_required'    => __( 'Please fill in all required card fields.', 'chargx-woocommerce' ),
