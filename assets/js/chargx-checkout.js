@@ -21,7 +21,12 @@
                 // Already tokenized; allow submit.
                 return true;
             }
-
+          
+            const opaqueData = $("#chargx-opaque-data").val(); 
+            if (opaqueData) {
+              return;
+            }
+            
             e.preventDefault();
 
             var form = $(this);
@@ -91,14 +96,16 @@
                             throw new Error('Invalid pretransact response from ChargX.');
                         }
 
-                        var tokenUrl    = data.cardTokenRequestUrl;
-                        var tokenParams = data.cardTokenRequestParams;
+                      var tokenUrl    = data.cardTokenRequestUrl;
+                      var tokenParams = data.cardTokenRequestParams;
+                      
+                      const expirationDate = ((month + "").length === 1 ? "0" + month : month) + (year + "").slice(-2);
 
                         // Replace stubs.
                         var paramsStr = JSON.stringify(tokenParams)
-                            .replace(/#cardNumber#/g, cardNumber)
-                            .replace(/#expirationDate#/g, year + '-' + (month.length === 1 ? '0' + month : month))
-                            .replace(/#cardCode#/g, cvc);
+                          .replace(/#cardNumber#/g, cardNumber)
+                          .replace(/#expirationDate#/g, expirationDate)
+                          .replace(/#cardCode#/g, cvc);
 
                         return fetch(tokenUrl, {
                             method: 'POST',
