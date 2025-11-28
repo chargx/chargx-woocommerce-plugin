@@ -138,10 +138,10 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
             return;
         }
 
-        // Store remote IDs.
+        // add metadata to order
         $order->update_meta_data( '_chargx_order_id', $chargx_order_id );
         $order->update_meta_data( '_chargx_order_display_id', $order_display_id );
-        // Also store opaque data for subscriptions.
+        // For subscriptions, we can’t reuse opaqueData easily, but store anyway.
         $order->update_meta_data( '_chargx_opaque_data', wp_json_encode( $opaque_data ) );
         $order->save();
 

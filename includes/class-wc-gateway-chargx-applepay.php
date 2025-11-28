@@ -75,6 +75,11 @@ class WC_Gateway_ChargX_ApplePay extends WC_Gateway_ChargX_Base {
     public function init_form_fields() {
         parent::init_form_fields();
 
+        // Override the title default value from parent
+        if ( isset( $this->form_fields['title'] ) ) {
+            $this->form_fields['title']['default'] = __( 'Apple Pay', 'chargx-woocommerce' );
+        }
+
         $this->form_fields = array_merge(
             $this->form_fields,
             array(
