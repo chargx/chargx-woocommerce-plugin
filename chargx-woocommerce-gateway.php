@@ -3,7 +3,7 @@
  * Plugin Name: ChargX Payment Gateway for WooCommerce
  * Description: Modern ChargX payment gateway for WooCommerce (Credit Cards + Apple/Google Pay, refunds, recurring).
  * Author: ChargX
- * Version: 0.11.0
+ * Version: 0.12.0
  * Requires at least: 5.8
  * Requires PHP: 7.4
  * WC requires at least: 4.0
@@ -45,6 +45,20 @@ function chargx_wc_init() {
     // Apple Pay merchant validation endpoint.
     add_action( 'wp_ajax_chargx_applepay_validate_merchant', 'chargx_wc_applepay_validate_merchant' );
     add_action( 'wp_ajax_nopriv_chargx_applepay_validate_merchant', 'chargx_wc_applepay_validate_merchant' );
+
+    // HPOS support
+    // https://woocommerce.com/document/high-performance-order-storage/
+    // https://webkul.com/blog/woocommerce-plugin-high-performance-order-storage-compatible/
+    add_action('before_woocommerce_init', function() {
+        // wc_get_logger()->info('before_woocommerce_init1', ['source' => 'chargx']);
+        if (class_exists(\Automattic\WooCommerce\Utilities\FeaturesUtil::class)) {
+            \Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility(
+                'custom_order_tables', // HPOS feature name
+                __FILE__,              // your main plugin file
+                true                   // true = compatible, false = incompatible
+            );
+        }
+    });
 }
 add_action( 'plugins_loaded', 'chargx_wc_init', 20 );
 
