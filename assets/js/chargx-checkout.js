@@ -269,7 +269,7 @@
       //
       // An envelope containing a signed, encrypted payload, should be sent to PG to decrypt and process it
       const encryptedPaymentToken = paymentMethodData.tokenizationData.token;
-      console.log("[Google Pay] encryptedPaymentToken:", encryptedPaymentToken);
+      // console.log("[Google Pay] encryptedPaymentToken:", encryptedPaymentToken);
 
       // Step 3: Submit checkout via AJAX to WooCommerce.
       //
