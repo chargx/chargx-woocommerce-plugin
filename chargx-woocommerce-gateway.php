@@ -124,6 +124,8 @@ function chargx_wc_enqueue_assets() {
             'card_required'    => __( 'Please fill in all required card fields.', 'chargx-woocommerce' ),
             'apple_not_avail'  => __( 'Apple Pay is not available on this device or browser.', 'chargx-woocommerce' ),
             'apple_error'      => __( 'Apple Pay payment failed. Please try another payment method.', 'chargx-woocommerce' ),
+            'google_not_avail'  => __( 'Google Pay is not available on this device or browser.', 'chargx-woocommerce' ),
+            'google_error'      => __( 'Google Pay payment failed. Please try another payment method.', 'chargx-woocommerce' ),
         ),
         'version'            => CHARGX_WC_VERSION,
     );
