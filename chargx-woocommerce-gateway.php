@@ -169,3 +169,4 @@ function chargx_wc_applepay_validate_merchant() {
 
     wp_send_json_success( $session );
 }
+
