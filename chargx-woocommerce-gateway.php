@@ -50,8 +50,9 @@ function chargx_wc_init() {
     // https://woocommerce.com/document/high-performance-order-storage/
     // https://webkul.com/blog/woocommerce-plugin-high-performance-order-storage-compatible/
     add_action('before_woocommerce_init', function() {
-        if (class_exists( FeaturesUtil::class)) {
-            FeaturesUtil::declare_compatibility(
+        // wc_get_logger()->info('before_woocommerce_init1', ['source' => 'chargx']);
+        if (class_exists(\Automattic\WooCommerce\Utilities\FeaturesUtil::class)) {
+            \Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility(
                 'custom_order_tables', // HPOS feature name
                 __FILE__,              // your main plugin file
                 true                   // true = compatible, false = incompatible
