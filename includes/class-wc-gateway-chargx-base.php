@@ -110,7 +110,7 @@ abstract class WC_Gateway_ChargX_Base extends WC_Payment_Gateway {
                 'title'       => __( 'Description', 'chargx-woocommerce' ),
                 'type'        => 'textarea',
                 'description' => __( 'Description seen by customers at checkout.', 'chargx-woocommerce' ),
-                'default'     => __( 'Pay securely using ChargX.', 'chargx-woocommerce' ),
+                'default'     => __( 'Pay securely', 'chargx-woocommerce' ),
                 'desc_tip'    => true,
             ),
             'testmode' => array(
