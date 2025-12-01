@@ -33,6 +33,7 @@ function chargx_wc_init() {
     require_once CHARGX_WC_PLUGIN_PATH . 'includes/class-wc-gateway-chargx-base.php';
     require_once CHARGX_WC_PLUGIN_PATH . 'includes/class-wc-gateway-chargx-card.php';
     require_once CHARGX_WC_PLUGIN_PATH . 'includes/class-wc-gateway-chargx-applepay.php';
+    require_once CHARGX_WC_PLUGIN_PATH . 'includes/class-wc-gateway-chargx-googlepay.php';
     require_once CHARGX_WC_PLUGIN_PATH . 'includes/class-chargx-subscriptions-helper.php';
 
     // Register gateways.
