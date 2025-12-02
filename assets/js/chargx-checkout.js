@@ -14,6 +14,17 @@
         "checkout_place_order_" + chargx_wc_params.card_gateway_id,
         ChargXCardHandler.onCheckoutPlaceOrder
       );
+
+      function attachExpiryListener() {
+        $("#chargx-card-expiry").on("input", function () {
+          const formatted = ChargXCardHandler.formatExpiryDate($(this).val());
+          $(this).val(formatted);
+        });
+      }
+
+      // Run again whenever WooCommerce updates checkout
+      $("body").on("init_checkout", attachExpiryListener);
+      $("body").on("updated_checkout", attachExpiryListener);
     },
 
     onCheckoutPlaceOrder: function (e) {
@@ -157,6 +168,18 @@
             reject(err);
           });
       });
+    },
+
+    formatExpiryDate: function (value) {
+      // Remove non-digit characters
+      const digits = value.replace(/\D/g, "");
+      // Limit to 4 digits
+      const limitedDigits = digits.slice(0, 4);
+      // Add slash after first 2 digits
+      if (limitedDigits.length > 2) {
+        return `${limitedDigits.slice(0, 2)}/${limitedDigits.slice(2)}`;
+      }
+      return limitedDigits;
     },
   };
 
