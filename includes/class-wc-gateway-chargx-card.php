@@ -49,7 +49,7 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
                            inputmode="numeric"
                            autocomplete="cc-exp"
                            data-chargx-card-expiry="1"
-                           placeholder="<?php esc_attr_e( 'MM / YY', 'chargx-woocommerce' ); ?>" />
+                           placeholder="<?php esc_attr_e( 'MM/YY', 'chargx-woocommerce' ); ?>" />
                 </div>
 
                 <div class="chargx-card-cvc">
