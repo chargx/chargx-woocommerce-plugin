@@ -120,6 +120,7 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
         }
 
         if ( is_wp_error( $response ) ) {
+            $order->update_status('failed', __('Payment has been failed.', 'chargx-woocommerce'));
             $error_message = $response->get_error_message();
             $this->log( 'Payment failed: ' . $error_message, 'error' );
             wc_add_notice( $error_message, 'error' );
