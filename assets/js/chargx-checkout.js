@@ -164,12 +164,12 @@
             return res.json();
           })
           .then(function (data) {
-            if (!data || !data.opaqueData) {
+            if (!data || !(data.opaqueData || data.token)) {
               throw new Error(
                 "Invalid card tokenization response from processor."
               );
             }
-            resolve(data.opaqueData);
+            resolve(data.opaqueData || { token: data.token });
           })
           .catch(function (err) {
             reject(err);
