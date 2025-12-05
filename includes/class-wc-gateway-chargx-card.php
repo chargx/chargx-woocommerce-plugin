@@ -42,7 +42,7 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
 
             <div class="chargx-card-row chargx-card-row--exp-cvc">
                 <div class="chargx-card-expiry">
-                    <label for="chargx-card-expiry"><?php esc_html_e( 'Expiry', 'chargx-woocommerce' ); ?> <span class="required">*</span></label>
+                    <label for="chargx-card-expiry"><?php esc_html_e( 'Expiry (MM/YY)', 'chargx-woocommerce' ); ?> <span class="required">*</span></label>
                     <input id="chargx-card-expiry"
                            class="input-text chargx-card-expiry"
                            type="tel"
