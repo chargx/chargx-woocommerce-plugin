@@ -192,8 +192,10 @@ class WC_Gateway_ChargX_ApplePay extends WC_Gateway_ChargX_Base {
         if ( is_wp_error( $response ) ) {
             $order->update_status('failed', __('Payment has been failed.', 'chargx-woocommerce'));
             $error_message = $response->get_error_message();
-            $this->log( 'Apple Pay payment failed: ' . $error_message, 'error' );
-            wc_add_notice( $error_message, 'error' );
+            $body = $response->get_error_data()['body'];
+            $status = $response->get_error_data()['status'];
+            $this->log("Payment failed : $status: $body", 'error' );
+            wc_add_notice("$error_message. Make sure you entered valid card details. <br><br>Error details: $body", 'error' );
             return;
         }
 
