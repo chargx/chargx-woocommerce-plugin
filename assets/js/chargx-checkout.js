@@ -15,6 +15,11 @@
         ChargXCardHandler.onCheckoutPlaceOrder
       );
 
+      $(document.body).on("checkout_error", function () {
+         console.log("[XCardHandler] form checkout_error, cleanup");
+        $("#chargx-opaque-data").val("");
+      });
+
       function attachExpiryListener() {
         $("#chargx-card-expiry").on("input", function () {
           const formatted = ChargXCardHandler.formatExpiryDate($(this).val());
@@ -32,6 +37,8 @@
       }
       $("body").on("init_checkout", attachCardNumberListener);
       $("body").on("updated_checkout", attachCardNumberListener);
+
+      console.log("[XCardHandler] init");
     },
 
     onCheckoutPlaceOrder: function (e) {
@@ -41,6 +48,7 @@
       }
 
       const opaqueData = $("#chargx-opaque-data").val();
+      console.log("[XCardHandler] onCheckoutPlaceOrder", !!opaqueData);
       if (opaqueData) {
         return;
       }
