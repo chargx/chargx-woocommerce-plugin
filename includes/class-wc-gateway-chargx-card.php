@@ -17,6 +17,36 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
     }
 
     /**
+     * Extra settings specific to Card payments.
+     */
+    public function init_form_fields() {
+        parent::init_form_fields();
+
+        $this->form_fields = array_merge(
+            $this->form_fields,
+            array(
+                'apple_section' => array(
+                    'title'       => __( '3DS Settings', 'chargx-woocommerce' ),
+                    'type'        => 'title',
+                    'description' => __( 'Configure 3-D Secure to reduce your e-commerce payment fraud risk and increases customer confidence.', 'chargx-woocommerce' ),
+                ),
+                'enable_3ds' => array(
+                    'title'       => __( 'Enable 3-D Secure', 'chargx-woocommerce' ),
+                    'type'        => 'checkbox',
+                    'description' => __( 'Enable 3-D Secure', 'chargx-woocommerce' ),
+                    'default'     => 'no',
+                ),
+                '3ds_mount_element_selector' => array(
+                    'title'       => __( 'DOM element selector', 'chargx-woocommerce' ),
+                    'type'        => 'text',
+                    'description' => __( 'Mount the 3-D Secure UI to the DOM by providing a selector.', 'chargx-woocommerce' ),
+                    'default'     => '#threeds-placeholder',
+                ),
+            )
+        );
+    }
+
+    /**
      * Payment fields on checkout page.
      * NOTE: card inputs deliberately do NOT have name attributes, so card data is never posted to your server.
      */
