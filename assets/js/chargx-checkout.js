@@ -46,7 +46,8 @@
 
       console.log("[XCardHandler] init");
 
-      ChargXCardHandler.threeDSEnabled = chargx_wc_params["3ds_enabled"] === "yes";
+      ChargXCardHandler.threeDSEnabled =
+        chargx_wc_params["enable_3ds"] === "yes";
       ChargXCardHandler.threeDSMountSelector =
         chargx_wc_params["3ds_mount_element_selector"];
 
@@ -164,7 +165,7 @@
             };
             ChargXCardHandler.threeDSUI =
               ChargXCardHandler.threeDS.createUI(options);
-            
+
             console.log("[3DS] start", ChargXCardHandler.threeDSMountSelector);
 
             ChargXCardHandler.threeDSUI.start(
@@ -190,9 +191,11 @@
               };
               $("#chargx-3ds-data").val(JSON.stringify(threeDSData));
 
-              // Now submit the form "for real".
-              ChargXCardHandler.processing = false;
-              form.trigger("submit"); // triggers WC checkout again, but now with flag above.
+              setTimeout(() => {
+                // Now submit the form "for real".
+                ChargXCardHandler.processing = false;
+                form.trigger("submit"); // triggers WC checkout again, but now with flag above.
+              }, 5000);
             });
             // Listen for the 'failure' callback to indicate that the customer has failed to authenticate
             ChargXCardHandler.threeDSUI.on("failure", (e) => {
