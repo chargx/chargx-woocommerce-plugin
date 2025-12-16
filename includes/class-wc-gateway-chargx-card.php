@@ -25,12 +25,12 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
         $this->form_fields = array_merge(
             $this->form_fields,
             array(
-                'apple_section' => array(
+                '3ds_section' => array(
                     'title'       => __( '3DS Settings', 'chargx-woocommerce' ),
                     'type'        => 'title',
                     'description' => __( 'Configure 3-D Secure to reduce your e-commerce payment fraud risk and increases customer confidence.', 'chargx-woocommerce' ),
                 ),
-                'enable_3ds' => array(
+                '3ds_enabled' => array(
                     'title'       => __( 'Enable 3-D Secure', 'chargx-woocommerce' ),
                     'type'        => 'checkbox',
                     'description' => __( 'Enable 3-D Secure', 'chargx-woocommerce' ),
@@ -97,6 +97,10 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
             <input type="hidden" id="chargx-opaque-data" name="chargx_opaque_data" value="" />
         </fieldset>
         <?php
+
+        if ( $this->enable_3ds ) {
+            echo '<div id="threeds-placeholder"></div>';
+        }
     }
 
     /**

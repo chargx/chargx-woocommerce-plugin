@@ -129,6 +129,7 @@ function chargx_wc_enqueue_assets() {
         'cart_total'         => $cart_total,
         'currency'           => get_woocommerce_currency(),
         'card_publishable'   => $card_gateway ? $card_gateway->get_publishable_key() : '',
+        '3ds_enabled'        => $card_gateway && 'yes' === $card_gateway->get_option( '3ds_enabled', 'no' ) ? 'yes' : 'no',
         'apple_publishable'  => $apple_gateway ? $apple_gateway->get_publishable_key() : '',
         'google_publishable' => $google_gateway ? $google_gateway->get_publishable_key() : '',
         'card_testmode'      => $card_gateway && 'yes' === $card_gateway->get_option( 'testmode', 'no' ) ? 'yes' : 'no',

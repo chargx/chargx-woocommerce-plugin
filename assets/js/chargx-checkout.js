@@ -16,7 +16,7 @@
       );
 
       $(document.body).on("checkout_error", function () {
-         console.log("[XCardHandler] form checkout_error, cleanup");
+        console.log("[XCardHandler] form checkout_error, cleanup");
         $("#chargx-opaque-data").val("");
       });
 
@@ -39,6 +39,11 @@
       $("body").on("updated_checkout", attachCardNumberListener);
 
       console.log("[XCardHandler] init");
+
+      const threeDS_enabled = chargx_wc_params["3ds_enabled"];
+
+      console.log("[XCardHandler] threeDS_enabled", threeDS_enabled);
+      console.log("[XCardHandler] chargx_wc_params", chargx_wc_params);
     },
 
     onCheckoutPlaceOrder: function (e) {
