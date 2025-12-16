@@ -131,11 +131,11 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
         }
 
         // 3ds data
-        $three_ds_raw = isset( $_POST['chargx-3ds-data'] ) ? wp_unslash( $_POST['chargx-3ds-data'] ) : '';
+        $three_ds_raw = isset( $_POST['chargx_3ds_data'] ) ? wp_unslash( $_POST['chargx_3ds_data'] ) : '';
         $three_ds_data = null;
         if (!empty( $three_ds_raw ) ) {
           $decoded = json_decode( $three_ds_raw, true );
-          if ( !empty( $three_ds_data ) && is_array( $three_ds_data ) ) {
+          if ( !empty( $decoded ) && is_array( $decoded ) ) {
               $three_ds_data = $decoded;
           }
         }
