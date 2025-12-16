@@ -8,6 +8,12 @@
   var ChargXCardHandler = {
     processing: false,
 
+    threeDSEnabled: false,
+    threeDSMountSelector: null,
+    gateway3DS: null,
+    threeDS: null,
+    threeDSUI: null,
+
     init: function () {
       // Hook into WooCommerce checkout JS lifecycle for the card gateway.
       $("form.checkout, form#order_review").on(
@@ -40,10 +46,34 @@
 
       console.log("[XCardHandler] init");
 
-      const threeDS_enabled = chargx_wc_params["3ds_enabled"];
+      ChargXCardHandler.threeDSEnabled = chargx_wc_params["3ds_enabled"];
+      ChargXCardHandler.threeDSMountSelector =
+        chargx_wc_params["3ds_mount_element_selector"];
 
-      console.log("[XCardHandler] threeDS_enabled", threeDS_enabled);
-      console.log("[XCardHandler] chargx_wc_params", chargx_wc_params);
+      console.log(
+        "[XCardHandler] threeDSEnabled",
+        ChargXCardHandler.threeDSEnabled,
+        ChargXCardHandler.threeDSMountSelector
+      );
+    },
+
+    getBillingAddress: function () {
+      const v = (name) =>
+        document.querySelector(`[name="${name}"]`)?.value?.trim() || "";
+
+      return {
+        first_name: v("billing_first_name"),
+        last_name: v("billing_last_name"),
+        company: v("billing_company"),
+        address_1: v("billing_address_1"),
+        address_2: v("billing_address_2"),
+        city: v("billing_city"),
+        state: v("billing_state"),
+        postcode: v("billing_postcode"),
+        country: v("billing_country"),
+        phone: v("billing_phone"),
+        email: v("billing_email"),
+      };
     },
 
     onCheckoutPlaceOrder: function (e) {
@@ -103,9 +133,104 @@
         .then(function (opaqueData) {
           $("#chargx-opaque-data").val(JSON.stringify(opaqueData));
 
-          // Now submit the form "for real".
-          ChargXCardHandler.processing = false;
-          form.trigger("submit"); // triggers WC checkout again, but now with flag above.
+          // show 3DS UI
+          if (ChargXCardHandler.threeDSEnabled) {
+            const cartTotal = chargx_wc_params.cart_total || 0;
+            const amount = cartTotal.toFixed
+              ? cartTotal.toFixed(2)
+              : String(cartTotal);
+
+            const billing = getBillingAddress();
+
+            const options = {
+              paymentToken: opaqueData.token,
+              currency: chargx_wc_params.currency,
+              amount,
+              firstName: billing.first_name,
+              lastName: billing.last_name,
+              email: billing.email,
+              address1: billing.address_1,
+              city: billing.city,
+              state: billing.state,
+              country: billing.country,
+              postalCode: billing.postcode,
+              phone: billing.phone,
+            };
+            ChargXCardHandler.threeDSUI =
+              ChargXCardHandler.threeDS.createUI(options);
+
+            ChargXCardHandler.threeDSUI.start(
+              ChargXCardHandler.threeDSMountSelector
+            );
+
+            // listen for 3ds callbacks
+            // Listen for the 'challenge' callback to ask the user for a password
+            ChargXCardHandler.threeDSUI.on("challenge", (e) => {
+              console.log("[3DS] Challenged", e);
+            });
+            // Listen for the 'complete' callback to provide all the needed 3DS data
+            ChargXCardHandler.threeDSUI.on("complete", (e) => {
+              console.log("[3DS] complete", e);
+
+              const threeDSData = {
+                cavv: e.cavv,
+                xid: e.xid,
+                eci: e.eci,
+                cardHolderAuth: e.cardHolderAuth,
+                threeDsVersion: e.threeDsVersion,
+                directoryServerId: e.directoryServerId,
+              };
+              $("#chargx-3ds-data").val(JSON.stringify(threeDSData));
+
+              // Now submit the form "for real".
+              ChargXCardHandler.processing = false;
+              form.trigger("submit"); // triggers WC checkout again, but now with flag above.
+            });
+            // Listen for the 'failure' callback to indicate that the customer has failed to authenticate
+            ChargXCardHandler.threeDSUI.on("failure", (e) => {
+              console.error("[3DS] failure", e);
+              if (
+                e.code === "TRANSACTION_STATUS_N" ||
+                e.code === "TRANSACTION_STATUS_R"
+              ) {
+                // hard stop, show error message
+                // R — Rejected
+                // Issuer rejected authentication
+                // High fraud signal
+                // ❌ Do not fall back
+                // N — Not authenticated / Failed
+                // Authentication attempted but failed
+                // ❌ Do not fall back
+                alert(
+                  "Error while doing 3DS verification, Issuer rejected authentication: " +
+                    e.message
+                );
+                $("#chargx-opaque-data").val(""); // reset opaqueData
+                ChargXCardHandler.processing = false;
+                return;
+              }
+              if (e.code === "TRANSACTION_STATUS_U") {
+                // Authentication unavailable / not enrolled
+                // The card does NOT participate in 3DS
+                // → ✅ Proceed with payment WITHOUT liability shift
+
+                // Now submit the form "for real".
+                ChargXCardHandler.processing = false;
+                form.trigger("submit"); // triggers WC checkout again, but now with flag above.
+              }
+            });
+            // Listen for any errors that might occur
+            ChargXCardHandler.gateway3DS.on("error", (e) => {
+              console.error("[3DS] gateway general error", e);
+
+              $("#chargx-opaque-data").val(""); // reset opaqueData
+              ChargXCardHandler.processing = false;
+            });
+          } else {
+            // Now submit the form "for real".
+            ChargXCardHandler.processing = false;
+            form.trigger("submit"); // triggers WC checkout again, but now with flag above.
+          }
         })
         .catch(function (error) {
           ChargXCardHandler.processing = false;
@@ -149,6 +274,16 @@
               !data.cardTokenRequestParams
             ) {
               throw new Error("Invalid pretransact response from ChargX.");
+            }
+
+            // enable 3DS
+            if (ChargXCardHandler.threeDSEnabled) {
+              console.log("enable 3DS");
+              ChargXCardHandler.gateway3DS = Gateway.create(
+                data.gatewayPublicKey
+              );
+              ChargXCardHandler.threeDS =
+                ChargXCardHandler.gateway3DS.get3DSecure();
             }
 
             var tokenUrl = data.cardTokenRequestUrl;

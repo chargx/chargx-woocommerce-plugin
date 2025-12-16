@@ -103,6 +103,16 @@ function chargx_wc_enqueue_assets() {
         true
     );
 
+    // Load 3ds script.
+    // TODO: maybe load it only if 3DS enabled?.
+    wp_enqueue_script(
+      'chargx-gateway-js',
+      'https://secure.networkmerchants.com/js/v1/Gateway.js',
+      array(),
+      null,
+      true // load in footer
+    );
+
     // Get active gateways and their settings.
     $gateways = WC()->payment_gateways() ? WC()->payment_gateways->payment_gateways() : array();
 
