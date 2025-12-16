@@ -30,7 +30,7 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
                     'type'        => 'title',
                     'description' => __( 'Configure 3-D Secure to reduce your e-commerce payment fraud risk and increases customer confidence.', 'chargx-woocommerce' ),
                 ),
-                '3ds_enabled' => array(
+                'enable_3ds' => array(
                     'title'       => __( 'Enable 3-D Secure', 'chargx-woocommerce' ),
                     'type'        => 'checkbox',
                     'description' => __( 'Enable 3-D Secure', 'chargx-woocommerce' ),
@@ -99,7 +99,7 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
         </fieldset>
         <?php
 
-        if ( $this->enable_3ds ) {
+        if ('yes' === $this->get_option('enable_3ds')) {
             echo '<div id="threeds-placeholder"></div>';
         }
     }

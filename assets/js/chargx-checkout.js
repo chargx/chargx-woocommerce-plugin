@@ -46,12 +46,12 @@
 
       console.log("[XCardHandler] init");
 
-      ChargXCardHandler.threeDSEnabled = chargx_wc_params["3ds_enabled"];
+      ChargXCardHandler.threeDSEnabled = chargx_wc_params["3ds_enabled"] === "yes";
       ChargXCardHandler.threeDSMountSelector =
         chargx_wc_params["3ds_mount_element_selector"];
 
       console.log(
-        "[XCardHandler] threeDSEnabled",
+        "[3DS] [XCardHandler] threeDSEnabled",
         ChargXCardHandler.threeDSEnabled,
         ChargXCardHandler.threeDSMountSelector
       );
@@ -131,6 +131,11 @@
 
       ChargXCardHandler.tokenizeCard(cardNumber, month, year, cvc)
         .then(function (opaqueData) {
+          console.log(
+            "[3DS] tokenizeCard done, threeDSEnabled",
+            ChargXCardHandler.threeDSEnabled
+          );
+
           $("#chargx-opaque-data").val(JSON.stringify(opaqueData));
 
           // show 3DS UI
@@ -140,7 +145,8 @@
               ? cartTotal.toFixed(2)
               : String(cartTotal);
 
-            const billing = getBillingAddress();
+            const billing = ChargXCardHandler.getBillingAddress();
+            console.log("[3DS] billing", billing);
 
             const options = {
               paymentToken: opaqueData.token,
@@ -158,6 +164,8 @@
             };
             ChargXCardHandler.threeDSUI =
               ChargXCardHandler.threeDS.createUI(options);
+            
+            console.log("[3DS] start", ChargXCardHandler.threeDSMountSelector);
 
             ChargXCardHandler.threeDSUI.start(
               ChargXCardHandler.threeDSMountSelector
@@ -278,7 +286,7 @@
 
             // enable 3DS
             if (ChargXCardHandler.threeDSEnabled) {
-              console.log("enable 3DS");
+              console.log("[3DS] enable");
               ChargXCardHandler.gateway3DS = Gateway.create(
                 data.gatewayPublicKey
               );
