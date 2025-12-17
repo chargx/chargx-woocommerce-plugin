@@ -201,6 +201,13 @@
 
               console.error("[3DS] failure", e);
 
+              // unmount so a user can retry
+              try {
+                ChargXCardHandler.threeDSUI.unmount();
+              } catch (e) {
+                console.warn("threeDSUI.unmount error", e);
+              }
+
               if (e.code === "TRANSACTION_STATUS_U") {
                 // Authentication unavailable / not enrolled
                 // The card does NOT participate in 3DS
@@ -297,11 +304,15 @@
             // enable 3DS
             if (ChargXCardHandler.threeDSEnabled) {
               console.log("[3DS] enable");
-              ChargXCardHandler.gateway3DS = Gateway.create(
-                data.gatewayPublicKey
-              );
-              ChargXCardHandler.threeDS =
-                ChargXCardHandler.gateway3DS.get3DSecure();
+              if (!ChargXCardHandler.gateway3DS) {
+                ChargXCardHandler.gateway3DS = Gateway.create(
+                  data.gatewayPublicKey
+                );
+              }
+              if (!ChargXCardHandler.threeDS) {
+                ChargXCardHandler.threeDS =
+                  ChargXCardHandler.gateway3DS.get3DSecure();
+              }
             }
 
             var tokenUrl = data.cardTokenRequestUrl;
