@@ -191,16 +191,24 @@
               };
               $("#chargx-3ds-data").val(JSON.stringify(threeDSData));
 
-              setTimeout(() => {
-                // Now submit the form "for real".
-                ChargXCardHandler.processing = false;
-                form.trigger("submit"); // triggers WC checkout again, but now with flag above.
-              }, 5000);
+              // Now submit the form "for real".
+              ChargXCardHandler.processing = false;
+              form.trigger("submit"); // triggers WC checkout again, but now with flag above.
             });
             // Listen for the 'failure' callback to indicate that the customer has failed to authenticate
             ChargXCardHandler.threeDSUI.on("failure", (e) => {
+              ChargXCardHandler.processing = false;
+
               console.error("[3DS] failure", e);
-              if (
+
+              if (e.code === "TRANSACTION_STATUS_U") {
+                // Authentication unavailable / not enrolled
+                // The card does NOT participate in 3DS
+                // → ✅ Proceed with payment WITHOUT liability shift
+
+                // Now submit the form "for real".
+                form.trigger("submit"); // triggers WC checkout again, but now with flag above.
+              } else if (
                 e.code === "TRANSACTION_STATUS_N" ||
                 e.code === "TRANSACTION_STATUS_R"
               ) {
@@ -212,22 +220,21 @@
                 // N — Not authenticated / Failed
                 // Authentication attempted but failed
                 // ❌ Do not fall back
+
+                $("#chargx-opaque-data").val(""); // reset opaqueData
+
                 alert(
                   "Error while doing 3DS verification, Issuer rejected authentication: " +
                     e.message
                 );
-                $("#chargx-opaque-data").val(""); // reset opaqueData
-                ChargXCardHandler.processing = false;
-                return;
-              }
-              if (e.code === "TRANSACTION_STATUS_U") {
-                // Authentication unavailable / not enrolled
-                // The card does NOT participate in 3DS
-                // → ✅ Proceed with payment WITHOUT liability shift
+              } else {
+                // Unknown Error
+                // Timeout Error
+                // Error on Authentication
 
-                // Now submit the form "for real".
-                ChargXCardHandler.processing = false;
-                form.trigger("submit"); // triggers WC checkout again, but now with flag above.
+                $("#chargx-opaque-data").val(""); // reset opaqueData
+
+                alert("Error while doing 3DS verification: " + e.message);
               }
             });
             // Listen for any errors that might occur
