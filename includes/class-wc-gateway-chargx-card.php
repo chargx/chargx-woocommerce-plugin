@@ -100,9 +100,10 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
         <?php
 
         if ('yes' === $this->get_option('enable_3ds')) {
-            echo '<div id="threeds-placeholder"></div>';
+            echo '<div id="threeds-placeholder" style="text-align: center;"></div>';
         }
     }
+
 
     /**
      * Process the payment: uses previously generated opaqueData from JS.
