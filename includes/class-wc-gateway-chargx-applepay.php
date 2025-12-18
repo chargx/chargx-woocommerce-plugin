@@ -195,7 +195,8 @@ class WC_Gateway_ChargX_ApplePay extends WC_Gateway_ChargX_Base {
             $body = $response->get_error_data()['body'];
             $status = $response->get_error_data()['status'];
             $this->log("Payment failed : $status: $body", 'error' );
-            wc_add_notice("$error_message. Make sure you entered valid card details. <br><br>Error details: $body", 'error' );
+            // wc_add_notice("$error_message. Make sure you entered valid card details. <br><br>Error details: $body", 'error' );
+            wc_add_notice($error_message, 'error' );
             return;
         }
 

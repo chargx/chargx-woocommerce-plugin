@@ -13,6 +13,7 @@
     gateway3DS: null,
     threeDS: null,
     threeDSUI: null,
+    threeDSChallenged: false,
 
     init: function () {
       // Hook into WooCommerce checkout JS lifecycle for the card gateway.
@@ -78,15 +79,27 @@
     },
 
     onCheckoutPlaceOrder: function (e) {
-      if (ChargXCardHandler.processing) {
-        // Already tokenized; allow submit.
-        return true;
+      const opaqueData = $("#chargx-opaque-data").val();
+
+      console.log(
+        "[XCardHandler] onCheckoutPlaceOrder: processing",
+        ChargXCardHandler.processing
+      );
+      console.log(
+        "[XCardHandler] onCheckoutPlaceOrder opaqueData",
+        !!opaqueData
+      );
+
+      if (!ChargXCardHandler.processing && opaqueData) {
+        // All data is here, continue with normal form submission to backend
+        console.log("[XCardHandler] onCheckoutPlaceOrder SUBMIT!");
+        return true; // true means do submit
       }
 
-      const opaqueData = $("#chargx-opaque-data").val();
-      console.log("[XCardHandler] onCheckoutPlaceOrder", !!opaqueData);
-      if (opaqueData) {
-        return;
+      if (ChargXCardHandler.threeDSChallenged) {
+        // if 3DS is visible - skip submission
+        console.log("[XCardHandler] threeDSChallenged, skip");
+        return false;
       }
 
       e.preventDefault();
@@ -176,6 +189,7 @@
             // Listen for the 'challenge' callback to ask the user for a password
             ChargXCardHandler.threeDSUI.on("challenge", (e) => {
               console.log("[3DS] Challenged", e);
+              ChargXCardHandler.threeDSChallenged = true;
             });
             // Listen for the 'complete' callback to provide all the needed 3DS data
             ChargXCardHandler.threeDSUI.on("complete", (e) => {
@@ -193,11 +207,13 @@
 
               // Now submit the form "for real".
               ChargXCardHandler.processing = false;
+              ChargXCardHandler.threeDSChallenged = false;
               form.trigger("submit"); // triggers WC checkout again, but now with flag above.
             });
             // Listen for the 'failure' callback to indicate that the customer has failed to authenticate
             ChargXCardHandler.threeDSUI.on("failure", (e) => {
               ChargXCardHandler.processing = false;
+              ChargXCardHandler.threeDSChallenged = false;
 
               console.error("[3DS] failure", e);
 
@@ -209,12 +225,24 @@
               }
 
               if (e.code === "TRANSACTION_STATUS_U") {
-                // Authentication unavailable / not enrolled
-                // The card does NOT participate in 3DS
-                // → ✅ Proceed with payment WITHOUT liability shift
+                if (
+                  e.cardHolderInfo?.toLowerCase() ===
+                  "challenge cancelled by user"
+                ) {
+                  // User clicked on Cancel button on challenge -> fail
+                  $("#chargx-opaque-data").val(""); // reset opaqueData
 
-                // Now submit the form "for real".
-                form.trigger("submit"); // triggers WC checkout again, but now with flag above.
+                  alert(
+                    "Verification was cancelled. Your payment wasn’t completed. Please try again"
+                  );
+                } else {
+                  // Authentication unavailable / not enrolled
+                  // The card does NOT participate in 3DS
+                  // → ✅ Proceed with payment WITHOUT liability shift
+
+                  // Now submit the form "for real".
+                  form.trigger("submit"); // triggers WC checkout again, but now with flag above.
+                }
               } else if (
                 e.code === "TRANSACTION_STATUS_N" ||
                 e.code === "TRANSACTION_STATUS_R"
@@ -250,16 +278,20 @@
 
               $("#chargx-opaque-data").val(""); // reset opaqueData
               ChargXCardHandler.processing = false;
+              ChargXCardHandler.threeDSChallenged = false;
             });
           } else {
             // Now submit the form "for real".
             ChargXCardHandler.processing = false;
+            ChargXCardHandler.threeDSChallenged = false;
             form.trigger("submit"); // triggers WC checkout again, but now with flag above.
           }
         })
         .catch(function (error) {
           ChargXCardHandler.processing = false;
-          var msg =
+          ChargXCardHandler.threeDSChallenged = false;
+
+          const msg =
             error && error.message
               ? error.message
               : chargx_wc_params.i18n.card_error;
