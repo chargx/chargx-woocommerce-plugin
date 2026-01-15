@@ -210,6 +210,26 @@
               ChargXCardHandler.threeDSChallenged = false;
               form.trigger("submit"); // triggers WC checkout again, but now with flag above.
             });
+            ChargXCardHandler.threeDSUI.on("error", (e) => {
+              ChargXCardHandler.processing = false;
+              ChargXCardHandler.threeDSChallenged = false;
+
+              console.error("[3DS] error", e);
+
+              // unmount so a user can retry
+              try {
+                ChargXCardHandler.threeDSUI.unmount();
+              } catch (e) {
+                console.warn("threeDSUI.unmount error", e);
+              }
+
+              // TODO: maybe we should fail with error?
+              //
+              // The card does NOT participate in 3DS
+              //
+              // Now submit the form "for real".
+              form.trigger("submit"); // triggers WC checkout again, but now with flag above.
+            });
             // Listen for the 'failure' callback to indicate that the customer has failed to authenticate
             ChargXCardHandler.threeDSUI.on("failure", (e) => {
               ChargXCardHandler.processing = false;
@@ -233,7 +253,7 @@
                   $("#chargx-opaque-data").val(""); // reset opaqueData
 
                   alert(
-                    "Verification was cancelled. Your payment wasn’t completed. Please try again"
+                    "Verification was cancelled. Your payment wasn't completed. Please try again"
                   );
                 } else {
                   // Authentication unavailable / not enrolled
