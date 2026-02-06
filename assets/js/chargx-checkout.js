@@ -15,6 +15,7 @@
     threeDSUI: null,
     threeDSChallenged: false,
     paymentRedirectionFlow: false,
+    paymentRedirectSuccessUrl: null,
 
     init: function () {
       // Hook into WooCommerce checkout JS lifecycle for the card gateway.
@@ -61,7 +62,10 @@
 
       ChargXCardHandler.paymentRedirectionFlow =
         chargx_wc_params["payment_redirection_flow"];
+      ChargXCardHandler.paymentRedirectSuccessUrl =
+        chargx_wc_params["payment_redirect_success_url"];
       console.log("[ChargXCardHandler.paymentRedirectionFlow]", ChargXCardHandler.paymentRedirectionFlow);
+      console.log("[ChargXCardHandler.paymentRedirectSuccessUrl]", ChargXCardHandler.paymentRedirectSuccessUrl);
     },
 
     getBillingAddress: function () {
@@ -127,7 +131,7 @@
             ? parseFloat(amount).toFixed(2)
             : String(amount);
         var currency = (chargx_wc_params.currency || "usd").toLowerCase();
-        var successUrl = "http://localhost:8080/?page_id=115";
+        var successUrl = ChargXCardHandler.paymentRedirectSuccessUrl;
         ChargXCardHandler.processing = true;
         fetch("http://localhost:9000/v1/payment-request", {
           method: "POST",

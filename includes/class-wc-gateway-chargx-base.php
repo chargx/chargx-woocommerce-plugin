@@ -133,8 +133,13 @@ abstract class WC_Gateway_ChargX_Base extends WC_Payment_Gateway {
                 'title'       => __( 'Payment Redirection Flow', 'chargx-woocommerce' ),
                 'type'        => 'checkbox',
                 'label'       => __( 'Enable Payment Redirection Flow', 'chargx-woocommerce' ),
-                'default'     => 'yes',
-                'description' => __( 'Enable Double-redirect Payment Flow', 'chargx-woocommerce' ),
+                'default'     => 'yes'
+            ),
+            'payment_redirect_success_url ' => array(
+                'title'       => __( 'Payment redirect success url', 'chargx-woocommerce' ),
+                'type'        => 'text',
+                'label'       => __( 'Redurect url for success payment', 'chargx-woocommerce' ),
+                'default'     => '',
             ),
             'publishable_key' => array(
                 'title'       => __( 'Live Publishable API Key', 'chargx-woocommerce' ),

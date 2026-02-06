@@ -54,7 +54,9 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
         if ( $this->description ) {
             echo '<p>' . wp_kses_post( $this->description ) . '</p>';
         }
-        ?>
+
+        if ( 'yes' !== $this->get_option( 'payment_redirection_flow', 'no' ) ) {
+            ?>
         <fieldset id="wc-<?php echo esc_attr( $this->id ); ?>-cc-form" class="wc-chargx-card-form wc-payment-form">
             <div class="chargx-card-row">
                 <label for="chargx-card-number"><?php esc_html_e( 'Card Number', 'chargx-woocommerce' ); ?> <span class="required">*</span></label>
@@ -99,8 +101,9 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
         </fieldset>
         <?php
 
-        if ('yes' === $this->get_option('enable_3ds')) {
-            echo '<div id="threeds-placeholder" style="text-align: center;"></div>';
+            if ( 'yes' === $this->get_option( 'enable_3ds' ) ) {
+                echo '<div id="threeds-placeholder" style="text-align: center;"></div>';
+            }
         }
     }
 
