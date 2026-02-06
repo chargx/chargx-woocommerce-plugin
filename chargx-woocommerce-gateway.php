@@ -59,6 +59,17 @@ function chargx_wc_init() {
             );
         }
     });
+
+    add_action('admin_notices', function () {
+        if ( ! function_exists('WC') ) return;
+        if ( ! current_user_can('manage_woocommerce') ) return;
+
+        if ( chargx_wc_is_block_checkout() ) {
+            echo '<div class="notice notice-warning"><p>'
+                . esc_html__('ChargX Gateway plugin may not displayed because your store is using the WooCommerce Block-based Checkout and it can conflict with other plugins. If this is a case - try to disable other payment plugins.', 'chargx-woocommerce')
+                . '</p></div>';
+        }
+    });
 }
 add_action( 'plugins_loaded', 'chargx_wc_init', 20 );
 
@@ -196,3 +207,13 @@ function chargx_wc_applepay_validate_merchant() {
     wp_send_json_success( $session );
 }
 
+function chargx_wc_is_block_checkout() : bool {
+    if ( function_exists( 'has_block' ) ) {
+        $checkout_page_id = wc_get_page_id( 'checkout' );
+        if ( $checkout_page_id > 0 ) {
+            $content = get_post_field( 'post_content', $checkout_page_id );
+            return has_block( 'woocommerce/checkout', $content ) || has_block( 'woocommerce/cart', $content );
+        }
+    }
+    return false;
+}
