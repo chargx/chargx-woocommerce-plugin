@@ -14,6 +14,7 @@
     threeDS: null,
     threeDSUI: null,
     threeDSChallenged: false,
+    paymentRedirectionFlow: false,
 
     init: function () {
       // Hook into WooCommerce checkout JS lifecycle for the card gateway.
@@ -57,6 +58,9 @@
         ChargXCardHandler.threeDSEnabled,
         ChargXCardHandler.threeDSMountSelector
       );
+
+      ChargXCardHandler.paymentRedirectionFlow =
+        chargx_wc_params["payment_redirection_flow"];
     },
 
     getBillingAddress: function () {

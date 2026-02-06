@@ -144,6 +144,7 @@ function chargx_wc_enqueue_assets() {
         'apple_publishable'  => $apple_gateway ? $apple_gateway->get_publishable_key() : '',
         'google_publishable' => $google_gateway ? $google_gateway->get_publishable_key() : '',
         'card_testmode'      => $card_gateway && 'yes' === $card_gateway->get_option( 'testmode', 'no' ) ? 'yes' : 'no',
+        'payment_redirection_flow' => $card_gateway && 'yes' === $card_gateway->get_option( 'payment_redirection_flow', 'no' ) ? 'yes' : 'no',
         'apple_testmode'     => $apple_gateway && 'yes' === $apple_gateway->get_option( 'testmode', 'no' ) ? 'yes' : 'no',
         'google_testmode'    => $google_gateway && 'yes' === $google_gateway->get_option( 'testmode', 'no' ) ? 'yes' : 'no',
         'i18n'               => array(

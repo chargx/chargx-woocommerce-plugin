@@ -50,6 +50,14 @@ abstract class WC_Gateway_ChargX_Base extends WC_Payment_Gateway {
      */
     public $testmode;
 
+
+    /**
+     * Double-redirect flow
+     *
+     * @var string yes|no
+     */
+    public $payment_redirection_flow;
+
     /**
      * Capture type: capture or authorize.
      *
@@ -78,6 +86,7 @@ abstract class WC_Gateway_ChargX_Base extends WC_Payment_Gateway {
         $this->description          = $this->get_option( 'description' );
         $this->enabled              = $this->get_option( 'enabled', 'no' );
         $this->testmode             = $this->get_option( 'testmode', 'no' );
+        $this->payment_redirection_flow = $this->get_option( 'payment_redirection_flow', 'no' );
         $this->publishable_key      = $this->get_option( 'publishable_key' );
         $this->test_publishable_key = $this->get_option( 'test_publishable_key' );
         $this->secret_key           = $this->get_option( 'secret_key' );
@@ -119,6 +128,13 @@ abstract class WC_Gateway_ChargX_Base extends WC_Payment_Gateway {
                 'label'       => __( 'Enable Test Mode (use test keys & sandbox store)', 'chargx-woocommerce' ),
                 'default'     => 'yes',
                 'description' => __( 'Use your ChargX sandbox store & test card numbers while this is enabled.', 'chargx-woocommerce' ),
+            ),
+            'payment_redirection_flow ' => array(
+                'title'       => __( 'Payment Redirection Flow', 'chargx-woocommerce' ),
+                'type'        => 'checkbox',
+                'label'       => __( 'Enable Payment Redirection Flow', 'chargx-woocommerce' ),
+                'default'     => 'yes',
+                'description' => __( 'Enable Double-redirect Payment Flow', 'chargx-woocommerce' ),
             ),
             'publishable_key' => array(
                 'title'       => __( 'Live Publishable API Key', 'chargx-woocommerce' ),
