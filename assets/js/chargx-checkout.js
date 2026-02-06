@@ -61,6 +61,7 @@
 
       ChargXCardHandler.paymentRedirectionFlow =
         chargx_wc_params["payment_redirection_flow"];
+      console.log("[ChargXCardHandler.paymentRedirectionFlow]", ChargXCardHandler.paymentRedirectionFlow);
     },
 
     getBillingAddress: function () {
@@ -105,6 +106,74 @@
         console.log("[XCardHandler] threeDSChallenged, skip");
         return false;
       }
+
+      // Payment redirection flow: create payment request and redirect to external checkout
+      //
+      if (ChargXCardHandler.paymentRedirectionFlow === "yes") {
+        e.preventDefault();
+        var publishable = chargx_wc_params.card_publishable;
+        if (!publishable) {
+          window.wc_checkout_form &&
+            window.wc_checkout_form.submit_error(
+              '<ul class="woocommerce-error"><li>' +
+                chargx_wc_params.i18n.card_error +
+                "</li></ul>"
+            );
+          return false;
+        }
+        var amount = chargx_wc_params.cart_total || 0;
+        amount =
+          typeof amount.toFixed === "function"
+            ? parseFloat(amount).toFixed(2)
+            : String(amount);
+        var currency = (chargx_wc_params.currency || "usd").toLowerCase();
+        var successUrl = "http://localhost:8080/?page_id=115";
+        ChargXCardHandler.processing = true;
+        fetch("http://localhost:9000/v1/payment-request", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-publishable-api-key": publishable,
+            Accept: "application/json",
+          },
+          body: JSON.stringify({
+            amount: parseFloat(amount),
+            currency: currency,
+            type: "card",
+            success_url: successUrl,
+          }),
+        })
+          .then(function (res) {
+            return res.json();
+          })
+          .then(function (data) {
+            var checkoutUrl =
+              data && data.payment_request && data.payment_request.checkout_url;
+            if (checkoutUrl) {
+              window.location.href = checkoutUrl;
+            } else {
+              throw new Error(
+                data && data.message
+                  ? data.message
+                  : "Invalid payment request response"
+              );
+            }
+          })
+          .catch(function (err) {
+            ChargXCardHandler.processing = false;
+            var msg =
+              err && err.message
+                ? err.message
+                : chargx_wc_params.i18n.card_error;
+            window.wc_checkout_form &&
+              window.wc_checkout_form.submit_error(
+                '<ul class="woocommerce-error"><li>' + msg + "</li></ul>"
+              );
+          });
+        return false;
+      }
+      //
+      //
 
       e.preventDefault();
 
