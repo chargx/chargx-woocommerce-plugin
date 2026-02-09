@@ -64,8 +64,13 @@
         chargx_wc_params["payment_redirection_flow"];
       ChargXCardHandler.paymentRedirectSuccessUrl =
         chargx_wc_params["payment_redirect_success_url"];
-      console.log("[ChargXCardHandler.paymentRedirectionFlow]", ChargXCardHandler.paymentRedirectionFlow);
-      console.log("[ChargXCardHandler.paymentRedirectSuccessUrl]", ChargXCardHandler.paymentRedirectSuccessUrl);
+
+      ChargXCardHandler.apiEndpoint = chargx_wc_params["api_endpoint"];
+
+      console.log(
+        "[ChargXCardHandler.apiEndpoint]",
+        ChargXCardHandler.apiEndpoint
+      );
     },
 
     getBillingAddress: function () {
@@ -134,7 +139,7 @@
         var currency = (chargx_wc_params.currency || "usd").toLowerCase();
         var successUrl = ChargXCardHandler.paymentRedirectSuccessUrl;
         ChargXCardHandler.processing = true;
-        fetch("http://localhost:9000/v1/payment-request", {
+        fetch(`${ChargXCardHandler.apiEndpoint}/v1/payment-request`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
