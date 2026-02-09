@@ -112,9 +112,17 @@ function chargx_wc_enqueue_assets() {
     );
 
     wp_enqueue_script(
+        'chargx-checkout-utils-js',
+        CHARGX_WC_PLUGIN_URL . 'assets/js/chargx-checkout-utils.js',
+        array(),
+        CHARGX_WC_VERSION,
+        true
+    );
+
+    wp_enqueue_script(
         'chargx-checkout-js',
         CHARGX_WC_PLUGIN_URL . 'assets/js/chargx-checkout.js',
-        array( 'jquery', 'chargx-applepay-js', 'chargx-googlepay-js' ),
+        array( 'jquery', 'chargx-applepay-js', 'chargx-googlepay-js', 'chargx-checkout-utils-js' ),
         CHARGX_WC_VERSION,
         true
     );

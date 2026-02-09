@@ -31,7 +31,7 @@
 
       function attachExpiryListener() {
         $("#chargx-card-expiry").on("input", function () {
-          const formatted = ChargXCardHandler.formatExpiryDate($(this).val());
+          const formatted = ChargXCheckoutUtils.formatExpiryDate($(this).val());
           $(this).val(formatted);
         });
       }
@@ -40,7 +40,7 @@
 
       function attachCardNumberListener() {
         $("#chargx-card-number").on("input", function () {
-          const formatted = ChargXCardHandler.formatCardNumber($(this).val());
+          const formatted = ChargXCheckoutUtils.formatCardNumber($(this).val());
           $(this).val(formatted);
         });
       }
@@ -489,28 +489,6 @@
             reject(err);
           });
       });
-    },
-
-    formatExpiryDate: function (value) {
-      // Remove non-digit characters
-      const digits = value.replace(/\D/g, "");
-      // Limit to 4 digits
-      const limitedDigits = digits.slice(0, 4);
-      // Add slash after first 2 digits
-      if (limitedDigits.length > 2) {
-        return `${limitedDigits.slice(0, 2)}/${limitedDigits.slice(2)}`;
-      }
-      return limitedDigits;
-    },
-
-    formatCardNumber: function (value) {
-      // Remove non-digit characters
-      const digits = value.replace(/\D/g, "");
-      // Limit to 16 digits
-      const limitedDigits = digits.slice(0, 19);
-      // Add spaces every 4 digits
-      const formatted = limitedDigits.replace(/(\d{4})(?=\d)/g, "$1 ");
-      return formatted;
     },
   };
 
