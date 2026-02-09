@@ -173,12 +173,6 @@ abstract class WC_Gateway_ChargX_Base extends WC_Payment_Gateway {
                     'authorize' => __( 'Authorize only (capture later)', 'chargx-woocommerce' ),
                 ),
             ),
-            'api_endpoint' => array(
-                'title'       => __( 'API Endpoint', 'chargx-woocommerce' ),
-                'type'        => 'text',
-                'description' => __( 'Your ChargX API endpoint.', 'chargx-woocommerce' ),
-                'default'     => 'https://api.chargx.io',
-            ),
             'payment_redirection_flow' => array(
                 'title'       => __( 'Payment Redirection Flow', 'chargx-woocommerce' ),
                 'type'        => 'checkbox',
@@ -192,6 +186,17 @@ abstract class WC_Gateway_ChargX_Base extends WC_Payment_Gateway {
                 'label'       => __( 'Redurect url for success payment', 'chargx-woocommerce' ),
                 'default'     => '',
                 'description' => __( 'Payment redirect success url', 'chargx-woocommerce' ),
+            ),
+            'developers_section' => array(
+                'title'       => __( 'Developers Settings', 'chargx-woocommerce' ),
+                'type'        => 'title',
+                'description' => __( 'Developers related settings', 'chargx-woocommerce' ),
+            ),
+            'api_endpoint' => array(
+                'title'       => __( 'API Endpoint', 'chargx-woocommerce' ),
+                'type'        => 'text',
+                'description' => __( 'Your ChargX API endpoint.', 'chargx-woocommerce' ),
+                'default'     => 'https://api.chargx.io',
             ),
             'debug' => array(
                 'title'       => __( 'Debug Log', 'chargx-woocommerce' ),
