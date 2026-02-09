@@ -96,9 +96,25 @@ function chargx_wc_enqueue_assets() {
     );
 
     wp_enqueue_script(
+        'chargx-applepay-js',
+        CHARGX_WC_PLUGIN_URL . 'assets/js/chargx-applepay.js',
+        array( 'jquery' ),
+        CHARGX_WC_VERSION,
+        true
+    );
+
+    wp_enqueue_script(
+        'chargx-googlepay-js',
+        CHARGX_WC_PLUGIN_URL . 'assets/js/chargx-googlepay.js',
+        array( 'jquery' ),
+        CHARGX_WC_VERSION,
+        true
+    );
+
+    wp_enqueue_script(
         'chargx-checkout-js',
         CHARGX_WC_PLUGIN_URL . 'assets/js/chargx-checkout.js',
-        array( 'jquery' ),
+        array( 'jquery', 'chargx-applepay-js', 'chargx-googlepay-js' ),
         CHARGX_WC_VERSION,
         true
     );
@@ -159,6 +175,8 @@ function chargx_wc_enqueue_assets() {
         'version'            => CHARGX_WC_VERSION,
     );
 
+    wp_localize_script( 'chargx-applepay-js', 'chargx_wc_params', $params );
+    wp_localize_script( 'chargx-googlepay-js', 'chargx_wc_params', $params );
     wp_localize_script( 'chargx-checkout-js', 'chargx_wc_params', $params );
 }
 
