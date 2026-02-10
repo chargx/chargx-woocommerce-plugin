@@ -151,6 +151,30 @@ class ChargX_API_Client {
     }
 
     /**
+     * Create payment request (redirect flow).
+     *
+     * POST /v1/payment-request
+     * Mirrors the request in chargx-checkout.js for server-side redirect flow.
+     *
+     * @param float  $amount      Order total amount.
+     * @param string $currency    Order currency code (e.g. usd).
+     * @param string $type        Payment type, e.g. "card".
+     * @param string $success_url URL to redirect after successful payment.
+     * @return array|WP_Error Response with payment_request.checkout_url or error.
+     */
+    public function create_payment_request( $amount, $currency, $type = 'card', $success_url = '' ) {
+        $amount   = (float) $amount;
+        $currency = strtolower( (string) $currency );
+        $body     = array(
+            'amount'      => $amount,
+            'currency'    => $currency,
+            'type'        => (string) $type,
+            'success_url' => (string) $success_url,
+        );
+        return $this->post( 'v1/payment-request', $body );
+    }
+
+    /**
      * Retrieve pretransact keys.
      *
      * GET /pretransact

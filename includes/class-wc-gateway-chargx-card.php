@@ -122,6 +122,23 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
             return;
         }
 
+        // Payment redirection flow: create payment request and redirect to external checkout
+        //
+        if ( 'yes' === $this->get_option( 'payment_redirection_flow', 'no' ) ) {
+            $api = $this->get_api_client();
+            $response = $api->create_payment_request( $order->get_total(), $order->get_currency(), "card", $this->payment_redirect_success_url );
+            if ( is_wp_error( $response ) ) {
+                wc_add_notice( __( 'Payment has been failed.', 'chargx-woocommerce' ), 'error' );
+                return;
+            }
+            $payment_request = $response['payment_request'];
+            $checkout_url = $payment_request['checkout_url'];
+            return array(
+                'result'   => 'success',
+                'redirect' => $checkout_url,
+            );
+        }
+
         // tokenized card
         $opaque_raw = isset( $_POST['chargx_opaque_data'] ) ? wp_unslash( $_POST['chargx_opaque_data'] ) : '';
         if ( empty( $opaque_raw ) ) {

@@ -14,8 +14,6 @@
     threeDS: null,
     threeDSUI: null,
     threeDSChallenged: false,
-    paymentRedirectionFlow: false,
-    paymentRedirectSuccessUrl: null,
 
     init: function () {
       // Hook into WooCommerce checkout JS lifecycle for the card gateway.
@@ -59,18 +57,6 @@
         ChargXCardHandler.threeDSEnabled,
         ChargXCardHandler.threeDSMountSelector
       );
-
-      ChargXCardHandler.paymentRedirectionFlow =
-        chargx_wc_params["payment_redirection_flow"];
-      ChargXCardHandler.paymentRedirectSuccessUrl =
-        chargx_wc_params["payment_redirect_success_url"];
-
-      ChargXCardHandler.apiEndpoint = chargx_wc_params["api_endpoint"];
-
-      console.log(
-        "[ChargXCardHandler.apiEndpoint]",
-        ChargXCardHandler.apiEndpoint
-      );
     },
 
     getBillingAddress: function () {
@@ -93,6 +79,8 @@
     },
 
     onCheckoutPlaceOrder: function (e) {
+      console.log("[XCardHandler] onCheckoutPlaceOrder", e);
+
       const opaqueData = $("#chargx-opaque-data").val();
 
       console.log(
@@ -115,77 +103,6 @@
         console.log("[XCardHandler] threeDSChallenged, skip");
         return false;
       }
-
-      // Payment redirection flow: create payment request and redirect to external checkout
-      //
-      if (ChargXCardHandler.paymentRedirectionFlow === "yes") {
-        e.preventDefault();
-
-        var publishable = chargx_wc_params.card_publishable;
-        if (!publishable) {
-          window.wc_checkout_form &&
-            window.wc_checkout_form.submit_error(
-              '<ul class="woocommerce-error"><li>' +
-                chargx_wc_params.i18n.card_error +
-                "</li></ul>"
-            );
-          return false;
-        }
-        var amount = chargx_wc_params.cart_total || 0;
-        amount =
-          typeof amount.toFixed === "function"
-            ? parseFloat(amount).toFixed(2)
-            : String(amount);
-        var currency = (chargx_wc_params.currency || "usd").toLowerCase();
-        var successUrl = ChargXCardHandler.paymentRedirectSuccessUrl;
-        ChargXCardHandler.processing = true;
-        fetch(`${ChargXCardHandler.apiEndpoint}/v1/payment-request`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-publishable-api-key": publishable,
-            Accept: "application/json",
-          },
-          body: JSON.stringify({
-            amount: parseFloat(amount),
-            currency: currency,
-            type: "card",
-            success_url: successUrl,
-          }),
-        })
-          .then(function (res) {
-            return res.json();
-          })
-          .then(function (data) {
-            console.log("[XCardHandler] payment-request response", data);
-            var checkoutUrl =
-              data && data.payment_request && data.payment_request.checkout_url;
-            if (checkoutUrl) {
-              window.location.href = checkoutUrl;
-            } else {
-              throw new Error(
-                data && data.message
-                  ? data.message
-                  : "Invalid payment request response"
-              );
-            }
-          })
-          .catch(function (err) {
-            console.log("[XCardHandler] payment-request err", err);
-            ChargXCardHandler.processing = false;
-            var msg =
-              err && err.message
-                ? err.message
-                : chargx_wc_params.i18n.card_error;
-            window.wc_checkout_form &&
-              window.wc_checkout_form.submit_error(
-                '<ul class="woocommerce-error"><li>' + msg + "</li></ul>"
-              );
-          });
-        return false;
-      }
-      //
-      //
 
       e.preventDefault();
 
