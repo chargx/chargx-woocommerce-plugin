@@ -126,13 +126,14 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
         //
         if ( 'yes' === $this->get_option( 'payment_redirection_flow', 'no' ) ) {
             $api = $this->get_api_client();
-            $response = $api->create_payment_request( $order->get_total(), $order->get_currency(), "card", $this->payment_redirect_success_url );
+            $payment_redirect_success_url = $this->payment_redirect_success_url . '?order_id=' . $order->get_id();
+            $response = $api->create_payment_request( $order->get_total(), $order->get_currency(), "card", $payment_redirect_success_url );
             if ( is_wp_error( $response ) ) {
                 wc_add_notice( __( 'Payment has been failed..', 'chargx-woocommerce' ), 'error' );
                 return;
             }
             $payment_request = $response['payment_request'];
-            $checkout_url = $payment_request['checkout_url'];
+            $checkout_url = $payment_request['checkout_url'] . '?success_url=' . urlencode($payment_redirect_success_url);
 
             // by default order status is "pending" (Pending payment) 
             // so no need to do anything additional here
