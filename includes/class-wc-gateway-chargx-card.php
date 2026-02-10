@@ -14,6 +14,9 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
         $this->method_description = __( 'Pay securely with credit/debit cards via ChargX.', 'chargx-woocommerce' );
         $this->has_fields         = true;
         parent::__construct();
+
+        add_action('woocommerce_api_wc_gateway_chargx_card', [$this, 'handle_return']);
+
     }
 
     /**
@@ -241,5 +244,39 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
             'result'   => 'success',
             'redirect' => $this->get_return_url( $order ),
         );
+    }
+
+    public function handle_return() {
+        // http://localhost:8080/?wc-api=wc_gateway_chargx_card&order_id=123
+        $this->log( 'handle_return: order_id: ' . $order_id, 'info' );
+        $this->log( 'handle_return: chargx_order_id: ' . $_GET['chargx_order_id'], 'info' );
+        $this->log( 'handle_return: chargx_order_display_id: ' . $_GET['chargx_order_display_id'], 'info' );
+
+        // get order
+        $order_id = absint($_GET['order_id'] ?? 0);  
+        $order = wc_get_order($order_id);
+        if (!$order) wp_die('Invalid order', 400);
+
+         // add metadata to order
+        if (!empty($_GET['chargx_order_id'])) {
+            $order->payment_complete( $_GET['chargx_order_id'] );
+        }
+        if (!empty($_GET['chargx_order_display_id'])) {
+            $order->update_meta_data( '_chargx_order_display_id', $_GET['chargx_order_display_id'] );
+        }
+
+        // // Optionally: do lightweight verification here, or just mark "needs verification"
+        // $order->update_meta_data( '_chargx_needs_finalize', 'yes' );
+
+        $order->save();
+
+        $this->log( 'handle_return: card2', 'info' );
+
+        // Go to the built-in thank you page
+        // $thankyou = add_query_arg(['chargx' => 'processing'], $this->get_return_url($order));
+        $thankyou = $this->get_return_url($order);
+
+        wp_safe_redirect($thankyou);
+        exit;
     }
 }
