@@ -126,7 +126,9 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
         //
         if ( 'yes' === $this->get_option( 'payment_redirection_flow', 'no' ) ) {
             $api = $this->get_api_client();
-            $payment_redirect_success_url = $this->payment_redirect_success_url . '?order_id=' . $order->get_id();
+            $payment_redirect_success_url = $this->payment_redirect_success_url;
+            $separator = ( strpos( $payment_redirect_success_url, '?' ) !== false ) ? '&' : '?';
+            $payment_redirect_success_url .= $separator . 'order_id=' . $order->get_id();
             $response = $api->create_payment_request( $order->get_total(), $order->get_currency(), "card", $payment_redirect_success_url );
             if ( is_wp_error( $response ) ) {
                 wc_add_notice( __( 'Payment has been failed..', 'chargx-woocommerce' ), 'error' );
