@@ -14,6 +14,8 @@
     threeDS: null,
     threeDSUI: null,
     threeDSChallenged: false,
+    paymentRedirectionFlow: false,
+    paymentRedirectSuccessUrl: null,
 
     init: function () {
       // Hook into WooCommerce checkout JS lifecycle for the card gateway.
@@ -57,6 +59,18 @@
         ChargXCardHandler.threeDSEnabled,
         ChargXCardHandler.threeDSMountSelector
       );
+
+      ChargXCardHandler.paymentRedirectionFlow =
+        chargx_wc_params["payment_redirection_flow"];
+      ChargXCardHandler.paymentRedirectSuccessUrl =
+        chargx_wc_params["payment_redirect_success_url"];
+
+      ChargXCardHandler.apiEndpoint = chargx_wc_params["api_endpoint"];
+
+      console.log(
+        "[ChargXCardHandler.apiEndpoint]",
+        ChargXCardHandler.apiEndpoint
+      );
     },
 
     getBillingAddress: function () {
@@ -80,7 +94,7 @@
 
     onCheckoutPlaceOrder: function (e) {
       console.log("[XCardHandler] onCheckoutPlaceOrder", e);
-
+      
       const opaqueData = $("#chargx-opaque-data").val();
 
       console.log(
@@ -103,6 +117,17 @@
         console.log("[XCardHandler] threeDSChallenged, skip");
         return false;
       }
+
+      // Payment redirection flow: create payment request and redirect to external checkout
+      //
+      if (ChargXCardHandler.paymentRedirectionFlow === "yes") {
+        console.log("1");
+        form.trigger("submit");
+        console.log("2");
+        return;
+      }
+      //
+      //
 
       e.preventDefault();
 

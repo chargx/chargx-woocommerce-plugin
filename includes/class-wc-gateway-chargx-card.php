@@ -125,10 +125,14 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
         // Payment redirection flow: create payment request and redirect to external checkout
         //
         if ( 'yes' === $this->get_option( 'payment_redirection_flow', 'no' ) ) {
+            $this->log( 'ChargX payment_redirection_flow 1');
             $api = $this->get_api_client();
+            $this->log( 'ChargX payment_redirection_flow 2');
             $response = $api->create_payment_request( $order->get_total(), $order->get_currency(), "card", $this->payment_redirect_success_url );
+            $this->log( 'ChargX payment_redirection_flow 3');
             if ( is_wp_error( $response ) ) {
-                wc_add_notice( __( 'Payment has been failed.', 'chargx-woocommerce' ), 'error' );
+                $this->log( 'ChargX payment_redirection_flow 4');
+                wc_add_notice( __( 'Payment has been failed..', 'chargx-woocommerce' ), 'error' );
                 return;
             }
             $payment_request = $response['payment_request'];

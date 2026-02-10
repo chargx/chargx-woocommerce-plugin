@@ -222,7 +222,7 @@ abstract class WC_Gateway_ChargX_Base extends WC_Payment_Gateway {
         $pub_key = $use_test ? $this->test_publishable_key : $this->publishable_key;
         $sec_key = $use_test ? $this->test_secret_key : $this->secret_key;
 
-        $this->api_client = new ChargX_API_Client( $pub_key, $sec_key, $use_test );
+        $this->api_client = new ChargX_API_Client($this->api_endpoint, $pub_key, $sec_key, $use_test);
 
         return $this->api_client;
     }

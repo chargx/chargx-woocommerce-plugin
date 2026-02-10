@@ -34,26 +34,29 @@ class ChargX_API_Client {
      *
      * @var string
      */
-    protected $endpoint = 'https://api.chargx.io';
+    protected $endpoint;
 
     /**
      * Admin API endpoint.
      *
      * @var string
      */
-    protected $admin_endpoint = 'https://api.chargx.io/admin';
+    protected $admin_endpoint;
 
     /**
      * Constructor.
      *
-     * @param string $publishable_key
-     * @param string $secret_key
-     * @param bool   $testmode
+     * @param string      $publishable_key
+     * @param string      $secret_key
+     * @param bool        $testmode
+     * @param string|null $endpoint Optional base API endpoint (e.g. https://api.chargx.io).
      */
-    public function __construct( $publishable_key, $secret_key = '', $testmode = false ) {
+    public function __construct($endpoint = 'https://api.chargx.io', $publishable_key, $secret_key = '', $testmode = false) {
         $this->publishable_key = trim( (string) $publishable_key );
         $this->secret_key      = trim( (string) $secret_key );
         $this->testmode        = (bool) $testmode;
+        $this->endpoint       = untrailingslashit( $endpoint );
+        $this->admin_endpoint = trailingslashit( $this->endpoint ) . 'admin';
     }
 
     /**
@@ -81,6 +84,10 @@ class ChargX_API_Client {
      */
     protected function post( $path, $body = array() ) {
         $url = trailingslashit( $this->endpoint ) . ltrim( $path, '/' );
+
+
+        ChargX_Logger::log( "API post: $url, body: " . wp_json_encode( $body ), 'info' );
+
 
         $response = wp_remote_post(
             $url,
