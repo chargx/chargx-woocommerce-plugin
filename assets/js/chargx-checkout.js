@@ -94,7 +94,7 @@
 
     onCheckoutPlaceOrder: function (e) {
       console.log("[XCardHandler] onCheckoutPlaceOrder", e);
-      
+
       const opaqueData = $("#chargx-opaque-data").val();
 
       console.log(
@@ -104,6 +104,11 @@
       console.log(
         "[XCardHandler] onCheckoutPlaceOrder opaqueData",
         !!opaqueData
+      );
+
+      console.log(
+        "[XCardHandler] onCheckoutPlaceOrder: paymentRedirectionFlow",
+        ChargXCardHandler.paymentRedirectionFlow
       );
 
       if (!ChargXCardHandler.processing && opaqueData) {
@@ -121,9 +126,7 @@
       // Payment redirection flow: create payment request and redirect to external checkout
       //
       if (ChargXCardHandler.paymentRedirectionFlow === "yes") {
-        console.log("1");
         form.trigger("submit");
-        console.log("2");
         return;
       }
       //
@@ -360,8 +363,13 @@
           );
         }
 
+        function replaceHostIfPort9000(url) {
+          return url.replace(/^https?:\/\/[^/]+:9000$/, (m) =>
+            m.replace(/\/\/[^/]+:9000$/, "//localhost:9000")
+          );
+        }
         // Step 1: pretransact to get cardTokenRequestUrl and params.
-        fetch("https://api.chargx.io/pretransact", {
+        fetch(`${replaceHostIfPort9000(ChargXCardHandler.apiEndpoint)}/pretransact`, {
           method: "GET",
           headers: {
             "x-publishable-api-key": publishable,
