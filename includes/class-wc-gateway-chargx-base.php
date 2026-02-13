@@ -129,7 +129,7 @@ abstract class WC_Gateway_ChargX_Base extends WC_Payment_Gateway {
                 'title'       => __( 'Description', 'chargx-woocommerce' ),
                 'type'        => 'textarea',
                 'description' => __( 'Description seen by customers at checkout.', 'chargx-woocommerce' ),
-                'default'     => __( 'Pay securely', 'chargx-woocommerce' ),
+                'default'     => __( 'For card payments and your security, click the “Place Order” button below to seamlessly complete your order through a private, encrypted verified card payment processor.', 'chargx-woocommerce' ),
                 'desc_tip'    => true,
             ),
             'testmode' => array(
