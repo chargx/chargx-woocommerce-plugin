@@ -372,11 +372,19 @@ class WC_Gateway_ChargX_Bank extends WC_Gateway_ChargX_Base {
                     }
 
                     window.addEventListener('message', function(event) {
+                        console.log('[message] event', event);
                         try {
                             var data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+                            console.log('[message] data', data);
                             if (!data || !data.message) return;
 
+                            console.log('[message] data.message', data.message);
                             if (data.message === 'success') {
+                                // At this point, you received a public_token for this bank connection flow.
+	                            // You can use this to fetch a bank_token.
+
+                                console.log('[message] data.public_token', data.public_token);
+
                                 var publicToken = data.public_token;
                                 if (!publicToken) { showError(); return; }
                                 input.value = publicToken;
@@ -385,12 +393,15 @@ class WC_Gateway_ChargX_Bank extends WC_Gateway_ChargX_Base {
                             }
 
                             if (data.message === 'terminated') {
+                                //User terminated the bank connection flow.
+
                                 showError('<?php echo esc_js( __( 'Bank connection was cancelled. You can try again from checkout.', 'chargx-woocommerce' ) ); ?>');
                             }
                         } catch (e) {}
                     });
 
                     if (typeof cabbage !== 'undefined') {
+                        console.log('[initializeGrid] linkToken', linkToken);
                         cabbage.initializeGrid(linkToken);
                         cabbage.openGrid(linkToken);
                     } else {
