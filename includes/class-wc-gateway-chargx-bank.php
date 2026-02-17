@@ -101,13 +101,6 @@ class WC_Gateway_ChargX_Bank extends WC_Gateway_ChargX_Base {
                 'type'    => 'password',
                 'default' => '',
             ),
-            'fingrid_sdk_url' => array(
-                'title'       => __( 'FinGrid SDK script URL', 'chargx-woocommerce' ),
-                'type'        => 'text',
-                'description' => __( 'URL of FinGrid SDK script for bank connection flow.', 'chargx-woocommerce' ),
-                'default'     => '',
-                'desc_tip'    => true,
-            ),
         );
 
         $this->form_fields = array_merge( $this->form_fields, $fingrid_fields );
@@ -311,7 +304,7 @@ class WC_Gateway_ChargX_Bank extends WC_Gateway_ChargX_Base {
         }
 
         $link_response = $client->create_link_token( array(
-            'client_name'  => 'test name',
+            'client_name'  => 'ChargX',
             'redirect_uri' => $this->get_return_url( $order ),
             'cust_email' => 'test@test.com',
             'theme_color' => '1A73E8',
@@ -329,7 +322,10 @@ class WC_Gateway_ChargX_Bank extends WC_Gateway_ChargX_Base {
             wp_die( esc_html__( 'Invalid link token from FinGrid.', 'chargx-woocommerce' ), 500 );
         }
 
-        $sdk_url = $this->get_option( 'fingrid_sdk_url', '' );
+        $use_sandbox = ( 'yes' === $this->testmode );
+        $sdk_url = $use_sandbox
+            ? 'https://cabbagepay.com/js/sandbox/cabbage.js'
+            : 'https://cabbagepay.com/js/production/cabbage.js';
         $form_action = WC()->api_request_url( 'wc_gateway_chargx_bank_fingrid' );
         $form_action = add_query_arg( array(
             'order_id' => $order->get_id(),
@@ -352,18 +348,15 @@ class WC_Gateway_ChargX_Bank extends WC_Gateway_ChargX_Base {
             </style>
         </head>
         <body>
-            <p class="fingrid-loading" id="fingrid-message"><?php esc_html_e( 'Preparing secure bank connection…', 'chargx-woocommerce' ); ?></p>
+            <p class="fingrid-loading" id="fingrid-message"><?php esc_html_e( 'Opening secure bank connection…', 'chargx-woocommerce' ); ?></p>
             <p class="fingrid-error" id="fingrid-error" style="display:none;"></p>
 
             <form id="fingrid-token-form" class="fingrid-form" action="<?php echo esc_url( $form_action ); ?>" method="post" style="display:none;">
                 <?php wp_nonce_field( 'chargx_fingrid_connect', 'fingrid_nonce' ); ?>
                 <input type="hidden" name="fingrid_public_token" id="fingrid-public-token" value="" />
-                <button type="submit" class="button"><?php esc_html_e( 'Complete payment', 'chargx-woocommerce' ); ?></button>
             </form>
 
-            <?php if ( ! empty( $sdk_url ) ) : ?>
-                <script src="<?php echo esc_url( $sdk_url ); ?>"></script>
-            <?php endif; ?>
+            <script src="<?php echo esc_url( $sdk_url ); ?>"></script>
             <script>
                 (function() {
                     var linkToken = <?php echo wp_json_encode( $link_token ); ?>;
@@ -378,19 +371,30 @@ class WC_Gateway_ChargX_Bank extends WC_Gateway_ChargX_Base {
                         errEl.style.display = 'block';
                     }
 
-                    function onPublicToken(publicToken) {
-                        if (!publicToken) { showError(); return; }
-                        input.value = publicToken;
-                        message.textContent = '<?php echo esc_js( __( 'Bank connected. Completing payment…', 'chargx-woocommerce' ) ); ?>';
-                        form.style.display = 'block';
-                    }
+                    window.addEventListener('message', function(event) {
+                        try {
+                            var data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+                            if (!data || !data.message) return;
 
-                    if (typeof FinGrid !== 'undefined' && FinGrid.create) {
-                        FinGrid.create({ link_token: linkToken, onSuccess: onPublicToken });
-                    } else if (typeof fingrid !== 'undefined' && fingrid.create) {
-                        fingrid.create({ link_token: linkToken, onSuccess: onPublicToken });
+                            if (data.message === 'success') {
+                                var publicToken = data.public_token;
+                                if (!publicToken) { showError(); return; }
+                                input.value = publicToken;
+                                message.textContent = '<?php echo esc_js( __( 'Bank connected. Completing payment…', 'chargx-woocommerce' ) ); ?>';
+                                form.submit();
+                            }
+
+                            if (data.message === 'terminated') {
+                                showError('<?php echo esc_js( __( 'Bank connection was cancelled. You can try again from checkout.', 'chargx-woocommerce' ) ); ?>');
+                            }
+                        } catch (e) {}
+                    });
+
+                    if (typeof cabbage !== 'undefined') {
+                        cabbage.initializeGrid(linkToken);
+                        cabbage.openGrid(linkToken);
                     } else {
-                        showError('<?php echo esc_js( __( 'FinGrid SDK not loaded. Please set the SDK URL in gateway settings.', 'chargx-woocommerce' ) ); ?>');
+                        showError('<?php echo esc_js( __( 'Cabbage SDK not loaded. Please check gateway SDK URLs.', 'chargx-woocommerce' ) ); ?>');
                     }
                 })();
             </script>
