@@ -101,6 +101,13 @@ class WC_Gateway_ChargX_Bank extends WC_Gateway_ChargX_Base {
                 'type'    => 'password',
                 'default' => '',
             ),
+            'fingrid_connected_acct' => array(
+                'title'       => __( 'FinGrid Connected Account (Merchant ID)', 'chargx-woocommerce' ),
+                'type'        => 'text',
+                'description' => __( 'Your unique merchant ID from FinGrid dashboard ("Your Credentials" tab).', 'chargx-woocommerce' ),
+                'default'     => '',
+                'desc_tip'    => true,
+            ),
         );
 
         $this->form_fields = array_merge( $this->form_fields, $fingrid_fields );
@@ -206,6 +213,8 @@ class WC_Gateway_ChargX_Bank extends WC_Gateway_ChargX_Base {
      * FinGrid connect page: GET shows link flow; POST receives public_token and completes payment.
      */
     public function handle_fingrid_connect() {
+        $this->log( 'handle_fingrid_connect', 'info' );
+
         $order_id = absint( isset( $_REQUEST['order_id'] ) ? $_REQUEST['order_id'] : 0 );
         $key      = isset( $_REQUEST['key'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['key'] ) ) : '';
 
@@ -215,13 +224,16 @@ class WC_Gateway_ChargX_Bank extends WC_Gateway_ChargX_Base {
         }
 
         if ( $this->is_post_request() && ! empty( $_POST['fingrid_public_token'] ) ) {
+            $this->log( 'handle_fingrid_connect FINAL POST', 'info' );
             if ( ! isset( $_POST['fingrid_nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['fingrid_nonce'] ) ), 'chargx_fingrid_connect' ) ) {
+                $this->log( 'handle_fingrid_connect FINAL POST FAIL', 'error' );
                 wp_die( esc_html__( 'Security check failed.', 'chargx-woocommerce' ), 403 );
             }
             $this->handle_fingrid_public_token( $order );
             return;
         }
 
+        $this->log( 'handle_fingrid_connect MAIN POST', 'info' );
         $this->render_fingrid_connect_page( $order );
     }
 
@@ -264,23 +276,34 @@ class WC_Gateway_ChargX_Bank extends WC_Gateway_ChargX_Base {
             exit;
         }
 
-        $return_url = $this->get_return_url( $order );
-        $payment    = $client->create_payment(
-            $bank_token,
-            $order->get_total(),
-            $order->get_currency(),
-            (string) $order->get_id(),
-            $return_url
-        );
-
-        if ( is_wp_error( $payment ) ) {
-            $this->log( 'FinGrid create_payment failed: ' . $payment->get_error_message(), 'error' );
-            wc_add_notice( $payment->get_error_message(), 'error' );
+        $connected_acct = $this->get_option( 'fingrid_connected_acct', '' );
+        if ( empty( $connected_acct ) ) {
+            $this->log( 'FinGrid connected_acct not configured.', 'error' );
+            wc_add_notice( __( 'Bank payment is not fully configured. Please contact the store.', 'chargx-woocommerce' ), 'error' );
             wp_safe_redirect( wc_get_checkout_url() );
             exit;
         }
 
-        $fingrid_order_id = isset( $payment['id'] ) ? $payment['id'] : ( isset( $payment['orderId'] ) ? $payment['orderId'] : '' );
+        $speed = 'same_day';
+        $return_url = $this->get_return_url( $order );
+        $transaction = $client->move_cabbage(
+            $bank_token,
+            $connected_acct,
+            (float) $order->get_total(),
+            'charge',
+            'single',
+            $speed,
+            0
+        );
+
+        if ( is_wp_error( $transaction ) ) {
+            $this->log( 'FinGrid move_cabbage failed: ' . $transaction->get_error_message(), 'error' );
+            wc_add_notice( $transaction->get_error_message(), 'error' );
+            wp_safe_redirect( wc_get_checkout_url() );
+            exit;
+        }
+
+        $fingrid_order_id = isset( $transaction['id'] ) ? $transaction['id'] : ( isset( $transaction['orderId'] ) ? $transaction['orderId'] : ( isset( $transaction['transaction_id'] ) ? $transaction['transaction_id'] : '' ) );
         if ( $fingrid_order_id ) {
             $order->update_meta_data( '_fingrid_order_id', $fingrid_order_id );
         }
@@ -372,10 +395,10 @@ class WC_Gateway_ChargX_Bank extends WC_Gateway_ChargX_Base {
                     }
 
                     window.addEventListener('message', function(event) {
-                        console.log('[message] event', event);
+      
                         try {
                             var data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
-                            console.log('[message] data', data);
+                  
                             if (!data || !data.message) return;
 
                             console.log('[message] data.message', data.message);

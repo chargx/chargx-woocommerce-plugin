@@ -124,32 +124,38 @@ class FinGrid_API_Client {
     }
 
     /**
-     * Create a payment using bank_token.
+     * Create Transaction (move_cabbage) – charge customer's bank account.
      *
-     * Endpoint and request shape should be updated per FinGrid payment API docs.
+     * @see https://developer.fingrid.io/api/move-cabbage
+     * Endpoint: {env_url}/api/custom/transaction/move_cabbage
      *
-     * @param string $bank_token  From exchange_public_token().
-     * @param float  $amount      Order total.
-     * @param string $currency    Currency code (e.g. USD).
-     * @param string $order_id    Merchant order reference.
-     * @param string $return_url  URL to redirect after payment (success or cancel).
+     * @param string $bank_token           From exchange_public_token().
+     * @param string $connected_acct        Your unique merchant ID (from FinGrid dashboard).
+     * @param float  $final_amount         Transaction amount.
+     * @param string $transaction_type      e.g. "charge" (pull from customer's bank).
+     * @param string $billing_type          "single" or "recurring".
+     * @param string $speed                 "same_day" or "next_day".
+     * @param float  $application_fee_amount Platform fee (optional, default 0).
      * @return array|WP_Error
      */
-    public function create_payment( $bank_token, $amount, $currency, $order_id, $return_url = '' ) {
+    public function move_cabbage( $bank_token, $connected_acct, $final_amount, $transaction_type = 'charge', $billing_type = 'single', $speed = 'same_day', $application_fee_amount = 0 ) {
         if ( empty( $bank_token ) ) {
             return new WP_Error( 'fingrid_missing_bank_token', __( 'Missing bank token.', 'chargx-woocommerce' ) );
         }
-
-        $body = array(
-            'bank_token' => $bank_token,
-            'amount'     => (float) $amount,
-            'currency'   => strtoupper( $currency ),
-            'order_id'   => (string) $order_id,
-        );
-        if ( $return_url ) {
-            $body['return_url'] = $return_url;
+        if ( empty( $connected_acct ) ) {
+            return new WP_Error( 'fingrid_missing_connected_acct', __( 'Missing connected account (merchant ID).', 'chargx-woocommerce' ) );
         }
 
-        return $this->post( 'v1/payments', $body );
+        $body = array(
+            'bank_token'            => $bank_token,
+            'connected_acct'         => (string) $connected_acct,
+            'transaction_type'      => (string) $transaction_type,
+            'billing_type'          => (string) $billing_type,
+            'speed'                 => (string) $speed,
+            'final_amount'          => (float) $final_amount,
+            'application_fee_amount' => (float) $application_fee_amount,
+        );
+
+        return $this->post( 'api/custom/transaction/move_cabbage', $body );
     }
 }
