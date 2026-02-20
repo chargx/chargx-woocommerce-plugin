@@ -101,13 +101,6 @@ class WC_Gateway_ChargX_Bank extends WC_Gateway_ChargX_Base {
                 'type'    => 'password',
                 'default' => '',
             ),
-            'fingrid_connected_acct' => array(
-                'title'       => __( 'FinGrid Connected Account (Merchant ID)', 'chargx-woocommerce' ),
-                'type'        => 'text',
-                'description' => __( 'Your unique merchant ID from FinGrid dashboard ("Your Credentials" tab).', 'chargx-woocommerce' ),
-                'default'     => '',
-                'desc_tip'    => true,
-            ),
         );
 
         $this->form_fields = array_merge( $this->form_fields, $fingrid_fields );
@@ -276,38 +269,22 @@ class WC_Gateway_ChargX_Bank extends WC_Gateway_ChargX_Base {
             exit;
         }
 
-        $connected_acct = $this->get_option( 'fingrid_connected_acct', '' );
-        if ( empty( $connected_acct ) ) {
-            $this->log( 'FinGrid connected_acct not configured.', 'error' );
-            wc_add_notice( __( 'Bank payment is not fully configured. Please contact the store.', 'chargx-woocommerce' ), 'error' );
-            wp_safe_redirect( wc_get_checkout_url() );
-            exit;
-        }
-
-        $speed = 'same_day';
-        $return_url = $this->get_return_url( $order );
-        $transaction = $client->move_cabbage(
-            $bank_token,
-            $connected_acct,
-            (float) $order->get_total(),
-            'charge',
-            'single',
-            $speed,
-            0
-        );
+        $return_url   = $this->get_return_url( $order );
+        $chargx_api   = $this->get_api_client();
+        $transaction  = $chargx_api->transact_bank_to_bank( $bank_token, (float) $order->get_total(), (string) $order->get_id() );
 
         if ( is_wp_error( $transaction ) ) {
-            $this->log( 'FinGrid move_cabbage failed: ' . $transaction->get_error_message(), 'error' );
+            $this->log( 'ChargX transact_bank_to_bank failed: ' . $transaction->get_error_message(), 'error' );
             wc_add_notice( $transaction->get_error_message(), 'error' );
             wp_safe_redirect( wc_get_checkout_url() );
             exit;
         }
 
-        $fingrid_order_id = isset( $transaction['id'] ) ? $transaction['id'] : ( isset( $transaction['orderId'] ) ? $transaction['orderId'] : ( isset( $transaction['transaction_id'] ) ? $transaction['transaction_id'] : '' ) );
-        if ( $fingrid_order_id ) {
-            $order->update_meta_data( '_fingrid_order_id', $fingrid_order_id );
+        $chargx_order_id = isset( $transaction['result']['orderId'] ) ? $transaction['result']['orderId'] : ( isset( $transaction['orderId'] ) ? $transaction['orderId'] : ( isset( $transaction['id'] ) ? $transaction['id'] : '' ) );
+        if ( $chargx_order_id ) {
+            $order->update_meta_data( '_chargx_order_id', $chargx_order_id );
         }
-        $order->payment_complete( $fingrid_order_id ?: 'fingrid' );
+        $order->payment_complete( $chargx_order_id ?: 'bank' );
         $order->save();
 
         WC()->cart->empty_cart();

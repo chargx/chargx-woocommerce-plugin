@@ -182,6 +182,28 @@ class ChargX_API_Client {
     }
 
     /**
+     * Bank-to-bank transaction (e.g. after FinGrid bank connection).
+     *
+     * POST v1/transact/bank-to-bank
+     *
+     * @param string $bank_token From exchange_public_token (FinGrid).
+     * @param float  $amount     Order total.
+     * @param string $order_id   WooCommerce order ID.
+     * @return array|WP_Error
+     */
+    public function transact_bank_to_bank( $bank_token, $amount, $order_id ) {
+        if ( empty( $bank_token ) ) {
+            return new WP_Error( 'chargx_missing_bank_token', __( 'Missing bank token.', 'chargx-woocommerce' ) );
+        }
+        $body = array(
+            'bankToken' => (string) $bank_token,
+            'amount'    => (float) $amount,
+            'orderId'   => (string) $order_id,
+        );
+        return $this->post( 'v1/transact/bank-to-bank', $body );
+    }
+
+    /**
      * Retrieve pretransact keys.
      *
      * GET /pretransact
