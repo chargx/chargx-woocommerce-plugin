@@ -182,11 +182,48 @@ class ChargX_API_Client {
     }
 
     /**
-     * Bank-to-bank transaction (e.g. after FinGrid bank connection).
+     * Create link token for bank-to-bank connection flow.
+     *
+     * POST v1/bank-to-bank/create_link_token
+     *
+     * @param array $params clientName, redirectUri, custPhoneNumber, custEmail, custFirstName, custLastName, themeColor, themeLogo.
+     * @return array|WP_Error Response containing link_token.
+     */
+    public function create_link_token( $params = array() ) {
+        $body = array(
+            'clientName'      => isset( $params['clientName'] ) ? (string) $params['clientName'] : '',
+            'redirectUri'     => isset( $params['redirectUri'] ) ? (string) $params['redirectUri'] : '',
+            'custPhoneNumber' => isset( $params['custPhoneNumber'] ) ? (string) $params['custPhoneNumber'] : '',
+            'custEmail'       => isset( $params['custEmail'] ) ? (string) $params['custEmail'] : '',
+            'custFirstName'   => isset( $params['custFirstName'] ) ? (string) $params['custFirstName'] : '',
+            'custLastName'   => isset( $params['custLastName'] ) ? (string) $params['custLastName'] : '',
+            'themeColor'      => isset( $params['themeColor'] ) ? (string) $params['themeColor'] : '',
+            'themeLogo'       => isset( $params['themeLogo'] ) ? (string) $params['themeLogo'] : '',
+        );
+        return $this->post( 'v1/bank-to-bank/create_link_token', $body );
+    }
+
+    /**
+     * Exchange public token for bank token after customer completes bank connection.
+     *
+     * POST v1/bank-to-bank/public_token_exchange
+     *
+     * @param string $public_token Token received from Cabbage SDK on frontend.
+     * @return array|WP_Error Response containing bank_token.
+     */
+    public function exchange_public_token( $public_token ) {
+        if ( empty( $public_token ) ) {
+            return new WP_Error( 'chargx_missing_public_token', __( 'Missing public token.', 'chargx-woocommerce' ) );
+        }
+        return $this->post( 'v1/bank-to-bank/public_token_exchange', array( 'publicToken' => (string) $public_token ) );
+    }
+
+    /**
+     * Bank-to-bank transaction (after bank connection flow).
      *
      * POST v1/transact/bank-to-bank
      *
-     * @param string $bank_token From exchange_public_token (FinGrid).
+     * @param string $bank_token From exchange_public_token().
      * @param float  $amount     Order total.
      * @param string $order_id   WooCommerce order ID.
      * @return array|WP_Error
@@ -200,7 +237,7 @@ class ChargX_API_Client {
             'amount'    => (float) $amount,
             'orderId'   => (string) $order_id,
         );
-        return $this->post( 'v1/transact/bank-to-bank', $body );
+        return $this->post( 'v1/bank-to-bank/transact', $body );
     }
 
     /**
