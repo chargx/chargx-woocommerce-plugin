@@ -253,6 +253,9 @@ class WC_Gateway_ChargX_Bank extends WC_Gateway_ChargX_Base {
 
                                 var publicToken = data.public_token;
                                 if (!publicToken) { showError(); return; }
+
+                                cabbage.closeGrid();
+
                                 input.value = publicToken;
                                 message.textContent = '<?php echo esc_js( __( 'Bank connected. Completing payment…', 'chargx-woocommerce' ) ); ?>';
                                 form.submit();
