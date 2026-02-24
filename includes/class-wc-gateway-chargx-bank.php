@@ -14,7 +14,7 @@ class WC_Gateway_ChargX_Bank extends WC_Gateway_ChargX_Base {
     public function __construct() {
         $this->id                 = 'chargx_bank';
         $this->method_title       = __( 'ChargX – Bank To Bank', 'chargx-woocommerce' );
-        $this->method_description = __( 'Pay with your bank via ChargX.', 'chargx-woocommerce' );
+        $this->method_description = __( 'Save 5% on your order when you Pay-By-Bank. Click "Place Order" below to securely and seamlessly complete your purchase through our private, verified Pay-By-Bank processor', 'chargx-woocommerce' );
         $this->has_fields         = true;
 
         parent::__construct();
@@ -44,13 +44,6 @@ class WC_Gateway_ChargX_Bank extends WC_Gateway_ChargX_Base {
         if ( $this->description ) {
             echo '<p>' . wp_kses_post( $this->description ) . '</p>';
         }
-        ?>
-        <div id="wc-<?php echo esc_attr( $this->id ); ?>-bank-form" class="wc-chargx-bank-form wc-payment-form">
-            <button type="submit" class="button alt chargx-bank-button" name="woocommerce_checkout_place_order" value="<?php esc_attr_e( 'Pay With Bank', 'chargx-woocommerce' ); ?>">
-                <?php esc_html_e( 'Pay With Bank', 'chargx-woocommerce' ); ?>
-            </button>
-        </div>
-        <?php
     }
 
     /**
