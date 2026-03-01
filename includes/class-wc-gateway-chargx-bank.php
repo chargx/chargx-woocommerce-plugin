@@ -30,7 +30,7 @@ class WC_Gateway_ChargX_Bank extends WC_Gateway_ChargX_Base {
         parent::init_form_fields();
 
         if ( isset( $this->form_fields['title'] ) ) {
-            $this->form_fields['title']['default'] = __( 'Pay With Bank', 'chargx-woocommerce' );
+            $this->form_fields['title']['default'] = __( 'Pay-By-Bank - SAVE 5%', 'chargx-woocommerce' );
         }
         if ( isset( $this->form_fields['description'] ) ) {
             $this->form_fields['description']['default'] = __( 'Pay securely with your bank account. You will be redirected to complete the payment.', 'chargx-woocommerce' );
