@@ -6,29 +6,31 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * ChargX Bank gateway.
  *
- * Displays a single "Pay With Bank" button; payment is completed via redirect to ChargX checkout.
+ * Displays a single "Pay With Bank" button. Uses ChargX API for link token,
+ * public token exchange, and bank-to-bank transaction (Cabbage SDK on frontend).
  */
 class WC_Gateway_ChargX_Bank extends WC_Gateway_ChargX_Base {
 
     public function __construct() {
         $this->id                 = 'chargx_bank';
-        $this->method_title       = __( 'ChargX – Bank', 'chargx-woocommerce' );
-        $this->method_description = __( 'Pay with your bank via ChargX.', 'chargx-woocommerce' );
+        $this->method_title       = __( 'ChargX – Bank To Bank', 'chargx-woocommerce' );
+        $this->method_description = __( 'Save 5% on your order when you Pay-By-Bank. Click "Place Order" below to securely and seamlessly complete your purchase through our private, verified Pay-By-Bank processor', 'chargx-woocommerce' );
         $this->has_fields         = true;
 
         parent::__construct();
 
         add_action( 'woocommerce_api_wc_gateway_chargx_bank', array( $this, 'handle_return' ) );
+        add_action( 'woocommerce_api_wc_gateway_chargx_bank_fingrid', array( $this, 'handle_bank_connect' ) );
     }
 
     /**
-     * Extra settings specific to Bank payments.
+     * Extra settings: Bank-specific.
      */
     public function init_form_fields() {
         parent::init_form_fields();
 
         if ( isset( $this->form_fields['title'] ) ) {
-            $this->form_fields['title']['default'] = __( 'Pay With Bank', 'chargx-woocommerce' );
+            $this->form_fields['title']['default'] = __( 'Pay-By-Bank - SAVE 5%', 'chargx-woocommerce' );
         }
         if ( isset( $this->form_fields['description'] ) ) {
             $this->form_fields['description']['default'] = __( 'Pay securely with your bank account. You will be redirected to complete the payment.', 'chargx-woocommerce' );
@@ -42,17 +44,10 @@ class WC_Gateway_ChargX_Bank extends WC_Gateway_ChargX_Base {
         if ( $this->description ) {
             echo '<p>' . wp_kses_post( $this->description ) . '</p>';
         }
-        ?>
-        <div id="wc-<?php echo esc_attr( $this->id ); ?>-bank-form" class="wc-chargx-bank-form wc-payment-form">
-            <button type="submit" class="button alt chargx-bank-button" name="woocommerce_checkout_place_order" id="place_order" value="<?php esc_attr_e( 'Pay With Bank', 'chargx-woocommerce' ); ?>">
-                <?php esc_html_e( 'Pay With Bank', 'chargx-woocommerce' ); ?>
-            </button>
-        </div>
-        <?php
     }
 
     /**
-     * Process the payment: create payment request and redirect to ChargX bank checkout.
+     * Process the payment: redirect to bank connect page (link_token → Cabbage SDK → exchange → transact).
      *
      * @param int $order_id
      * @return array|void
@@ -65,35 +60,252 @@ class WC_Gateway_ChargX_Bank extends WC_Gateway_ChargX_Base {
             return;
         }
 
-        $payment_redirect_success_url = $this->payment_redirect_success_url;
-        if ( empty( $payment_redirect_success_url ) ) {
-            $payment_redirect_success_url = WC()->api_request_url( 'wc_gateway_chargx_bank' );
-        }
-        $separator = ( strpos( $payment_redirect_success_url, '?' ) !== false ) ? '&' : '?';
-        $payment_redirect_success_url .= $separator . 'order_id=' . $order->get_id();
-
-        $api      = $this->get_api_client();
-        $response = $api->create_payment_request( $order->get_total(), $order->get_currency(), 'bank', $payment_redirect_success_url );
-
-        if ( is_wp_error( $response ) ) {
-            wc_add_notice( __( 'Payment could not be started. Please try again.', 'chargx-woocommerce' ), 'error' );
-            return;
-        }
-
-        $payment_request = isset( $response['payment_request'] ) ? $response['payment_request'] : array();
-        $checkout_url    = isset( $payment_request['checkout_url'] ) ? $payment_request['checkout_url'] : '';
-
-        if ( empty( $checkout_url ) ) {
-            wc_add_notice( __( 'Payment could not be started. Please try again.', 'chargx-woocommerce' ), 'error' );
-            return;
-        }
-
-        $checkout_url .= ( strpos( $checkout_url, '?' ) !== false ? '&' : '?' ) . 'success_url=' . rawurlencode( $payment_redirect_success_url );
+        // redirect to the bank connect page
+        //
+        $connect_url = WC()->api_request_url( 'wc_gateway_chargx_bank_fingrid' );
+        $connect_url = add_query_arg( array(
+            'order_id' => $order->get_id(),
+            'key'      => $order->get_order_key(),
+        ), $connect_url );
 
         return array(
             'result'   => 'success',
-            'redirect' => $checkout_url,
+            'redirect' => $connect_url,
         );
+    }
+
+    /**
+     * Bank connect page: GET shows link flow; POST receives public_token and completes payment.
+     */
+    public function handle_bank_connect() {
+        $order_id = absint( isset( $_REQUEST['order_id'] ) ? $_REQUEST['order_id'] : 0 );
+        $key      = isset( $_REQUEST['key'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['key'] ) ) : '';
+
+        $order = wc_get_order( $order_id );
+        if ( ! $order || $order->get_order_key() !== $key ) {
+            wp_die( esc_html__( 'Invalid order.', 'chargx-woocommerce' ), 400 );
+        }
+
+        if ( $this->is_post_request() && ! empty( $_POST['fingrid_public_token'] ) ) {
+            if ( ! isset( $_POST['fingrid_nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['fingrid_nonce'] ) ), 'chargx_fingrid_connect' ) ) {
+                wp_die( esc_html__( 'Security check failed.', 'chargx-woocommerce' ), 403 );
+            }
+            $this->handle_bank_public_token( $order );
+            return;
+        }
+
+        $this->render_bank_connect_page( $order );
+    }
+
+    /**
+     * Check if current request is POST.
+     *
+     * @return bool
+     */
+    protected function is_post_request() {
+        return isset( $_SERVER['REQUEST_METHOD'] ) && 'POST' === $_SERVER['REQUEST_METHOD'];
+    }
+
+    /**
+     * Get the amount to charge for a bank-to-bank transaction.
+     * Uses order total; if the order has the "5% Pay-By-Bank Discount" fee, that is already included in the total.
+     * If the fee is not on the order, applies 5% discount to subtotal so the charged amount matches.
+     *
+     * @param WC_Order $order
+     * @return float
+     */
+    protected function get_bank_transaction_amount( $order ) {
+        $this->log( 'get_bank_transaction_amount', 'info' );
+        $this->log( 'order->get_total(): ' . $order->get_total(), 'info' );
+        $this->log( 'order->get_subtotal(): ' . $order->get_subtotal(), 'info' );
+
+        $amount = (float) $order->get_total();
+        $has_discount_fee = false;
+        foreach ( $order->get_fees() as $fee ) {
+            if ( $fee->get_name() === '5% Pay-By-Bank Discount' ) {
+                $has_discount_fee = true;
+                break;
+            }
+        }
+        if ( $has_discount_fee ) {
+            $discount = (float) $order->get_subtotal() * 0.05;
+            $amount   = max( 0, $amount + $discount );
+            // TODO: maybe we can just use $order->get_subtotal() ?
+            $this->log( 'get_bank_transaction_amount amount: ' . $amount, 'info' );
+        }
+        return $amount;
+    }
+
+    /**
+     * Handle submitted public_token: exchange for bank_token and run ChargX bank-to-bank transaction.
+     *
+     * @param WC_Order $order
+     */
+    protected function handle_bank_public_token( $order ) {
+        $public_token = sanitize_text_field( wp_unslash( $_POST['fingrid_public_token'] ) );
+        $chargx_api   = $this->get_api_client();
+
+        $exchange = $chargx_api->exchange_public_token( $public_token );
+        if ( is_wp_error( $exchange ) ) {
+            $this->log( 'ChargX exchange_public_token failed: ' . $exchange->get_error_message(), 'error' );
+            wc_add_notice( __( 'Bank connection could not be completed. Please try again.', 'chargx-woocommerce' ), 'error' );
+            wp_safe_redirect( wc_get_checkout_url() );
+            exit;
+        }
+
+        $bank_token = isset( $exchange['bank_token'] ) ? $exchange['bank_token'] : ( isset( $exchange['bankToken'] ) ? $exchange['bankToken'] : '' );
+        if ( empty( $bank_token ) ) {
+            wc_add_notice( __( 'Invalid response from bank. Please try again.', 'chargx-woocommerce' ), 'error' );
+            wp_safe_redirect( wc_get_checkout_url() );
+            exit;
+        }
+
+        $return_url = $this->get_return_url( $order );
+        $amount     = $this->get_bank_transaction_amount( $order );
+        $transaction = $chargx_api->transact_bank_to_bank( $bank_token, $amount, (string) $order->get_id() );
+
+        if ( is_wp_error( $transaction ) ) {
+            $this->log( 'ChargX transact_bank_to_bank failed: ' . $transaction->get_error_message(), 'error' );
+            wc_add_notice( $transaction->get_error_message(), 'error' );
+            wp_safe_redirect( wc_get_checkout_url() );
+            exit;
+        }
+
+        $chargx_order_id = isset( $transaction['result']['orderId'] ) ? $transaction['result']['orderId'] : ( isset( $transaction['orderId'] ) ? $transaction['orderId'] : ( isset( $transaction['id'] ) ? $transaction['id'] : '' ) );
+        if ( $chargx_order_id ) {
+            $order->update_meta_data( '_chargx_order_id', $chargx_order_id );
+        }
+        $order->payment_complete( $chargx_order_id ?: 'bank' );
+        $order->save();
+
+        WC()->cart->empty_cart();
+        wp_safe_redirect( $return_url );
+        exit;
+    }
+
+    /**
+     * Render the bank connect page: create link_token via ChargX and output HTML + Cabbage SDK.
+     *
+     * @param WC_Order $order
+     */
+    protected function render_bank_connect_page( $order ) {
+        $chargx_api = $this->get_api_client();
+        $params     = array(
+            'clientName'      => get_bloginfo( 'name' ),
+            'redirectUri'     => $this->get_return_url( $order ),
+            'custPhoneNumber' => $order->get_billing_phone(),
+            'custEmail'       => $order->get_billing_email(),
+            'custFirstName'   => $order->get_billing_first_name(),
+            'custLastName'   => $order->get_billing_last_name(),
+            'themeColor'     => '1A73E8',
+            'themeLogo'      => '',
+        );
+
+        $link_response = $chargx_api->create_link_token( $params );
+        if ( is_wp_error( $link_response ) ) {
+            $this->log( 'ChargX create_link_token failed: ' . $link_response->get_error_message(), 'error' );
+            wp_die( esc_html__( 'Unable to start bank connection. Please try again.', 'chargx-woocommerce' ), 500 );
+        }
+
+        $link_token = isset( $link_response['link_token'] ) ? $link_response['link_token'] : '';
+        if ( empty( $link_token ) ) {
+            wp_die( esc_html__( 'Invalid link token.', 'chargx-woocommerce' ), 500 );
+        }
+
+        $use_sandbox = ( 'yes' === $this->testmode );
+        $sdk_url = $use_sandbox
+            ? 'https://cabbagepay.com/js/sandbox/cabbage.js'
+            : 'https://cabbagepay.com/js/production/cabbage.js';
+        $form_action = WC()->api_request_url( 'wc_gateway_chargx_bank_fingrid' );
+        $form_action = add_query_arg( array(
+            'order_id' => $order->get_id(),
+            'key'      => $order->get_order_key(),
+        ), $form_action );
+        ?>
+        <!DOCTYPE html>
+        <html <?php language_attributes(); ?>>
+        <head>
+            <meta charset="<?php bloginfo( 'charset' ); ?>">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <title><?php esc_html_e( 'Pay With Bank', 'chargx-woocommerce' ); ?></title>
+            <style>
+                body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 2rem; max-width: 480px; margin: 0 auto; }
+                .fingrid-loading { color: #666; }
+                .fingrid-error { color: #b32d2e; margin-top: 1rem; }
+                .fingrid-form { margin-top: 1.5rem; }
+                button.button { padding: 12px 24px; font-size: 16px; cursor: pointer; background: #0073aa; color: #fff; border: none; border-radius: 4px; }
+                button.button:disabled { opacity: 0.6; cursor: not-allowed; }
+            </style>
+        </head>
+        <body>
+            <p class="fingrid-loading" id="fingrid-message"><?php esc_html_e( 'Opening secure bank connection…', 'chargx-woocommerce' ); ?></p>
+            <p class="fingrid-error" id="fingrid-error" style="display:none;"></p>
+
+            <form id="fingrid-token-form" class="fingrid-form" action="<?php echo esc_url( $form_action ); ?>" method="post" style="display:none;">
+                <?php wp_nonce_field( 'chargx_fingrid_connect', 'fingrid_nonce' ); ?>
+                <input type="hidden" name="fingrid_public_token" id="fingrid-public-token" value="" />
+            </form>
+
+            <script src="<?php echo esc_url( $sdk_url ); ?>"></script>
+            <script>
+                (function() {
+                    var linkToken = <?php echo wp_json_encode( $link_token ); ?>;
+                    var form = document.getElementById('fingrid-token-form');
+                    var input = document.getElementById('fingrid-public-token');
+                    var message = document.getElementById('fingrid-message');
+                    var errEl = document.getElementById('fingrid-error');
+
+                    function showError(msg) {
+                        message.style.display = 'none';
+                        errEl.textContent = msg || '<?php echo esc_js( __( 'Something went wrong. Please try again.', 'chargx-woocommerce' ) ); ?>';
+                        errEl.style.display = 'block';
+                    }
+
+                    window.addEventListener('message', function(event) {
+      
+                        try {
+                            var data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+                  
+                            if (!data || !data.message) return;
+
+                            console.log('[message] data.message', data.message);
+                            if (data.message === 'success') {
+                                // At this point, you received a public_token for this bank connection flow.
+	                            // You can use this to fetch a bank_token.
+
+                                console.log('[message] data.public_token', data.public_token);
+
+                                var publicToken = data.public_token;
+                                if (!publicToken) { showError(); return; }
+
+                                cabbage.closeGrid();
+
+                                input.value = publicToken;
+                                message.textContent = '<?php echo esc_js( __( 'Bank connected. Completing payment…', 'chargx-woocommerce' ) ); ?>';
+                                form.submit();
+                            }
+
+                            if (data.message === 'terminated') {
+                                //User terminated the bank connection flow.
+
+                                showError('<?php echo esc_js( __( 'Bank connection was cancelled. You can try again from checkout.', 'chargx-woocommerce' ) ); ?>');
+                            }
+                        } catch (e) {}
+                    });
+
+                    if (typeof cabbage !== 'undefined') {
+                        console.log('[initializeGrid] linkToken', linkToken);
+                        cabbage.initializeGrid(linkToken);
+                        cabbage.openGrid(linkToken);
+                    } else {
+                        showError('<?php echo esc_js( __( 'Cabbage SDK not loaded. Please check gateway SDK URLs.', 'chargx-woocommerce' ) ); ?>');
+                    }
+                })();
+            </script>
+        </body>
+        </html>
+        <?php
+        exit;
     }
 
     /**
