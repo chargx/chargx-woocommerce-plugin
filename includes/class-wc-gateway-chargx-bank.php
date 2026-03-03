@@ -107,6 +107,36 @@ class WC_Gateway_ChargX_Bank extends WC_Gateway_ChargX_Base {
     }
 
     /**
+     * Get the amount to charge for a bank-to-bank transaction.
+     * Uses order total; if the order has the "5% Pay-By-Bank Discount" fee, that is already included in the total.
+     * If the fee is not on the order, applies 5% discount to subtotal so the charged amount matches.
+     *
+     * @param WC_Order $order
+     * @return float
+     */
+    protected function get_bank_transaction_amount( $order ) {
+        $this->log( 'get_bank_transaction_amount', 'info' );
+        $this->log( 'order->get_total(): ' . $order->get_total(), 'info' );
+        $this->log( 'order->get_subtotal(): ' . $order->get_subtotal(), 'info' );
+
+        $amount = (float) $order->get_total();
+        $has_discount_fee = false;
+        foreach ( $order->get_fees() as $fee ) {
+            if ( $fee->get_name() === '5% Pay-By-Bank Discount' ) {
+                $has_discount_fee = true;
+                break;
+            }
+        }
+        if ( $has_discount_fee ) {
+            $discount = (float) $order->get_subtotal() * 0.05;
+            $amount   = max( 0, $amount + $discount );
+            // TODO: maybe we can just use $order->get_subtotal() ?
+            $this->log( 'get_bank_transaction_amount amount: ' . $amount, 'info' );
+        }
+        return $amount;
+    }
+
+    /**
      * Handle submitted public_token: exchange for bank_token and run ChargX bank-to-bank transaction.
      *
      * @param WC_Order $order
@@ -130,8 +160,9 @@ class WC_Gateway_ChargX_Bank extends WC_Gateway_ChargX_Base {
             exit;
         }
 
-        $return_url  = $this->get_return_url( $order );
-        $transaction = $chargx_api->transact_bank_to_bank( $bank_token, (float) $order->get_total(), (string) $order->get_id() );
+        $return_url = $this->get_return_url( $order );
+        $amount     = $this->get_bank_transaction_amount( $order );
+        $transaction = $chargx_api->transact_bank_to_bank( $bank_token, $amount, (string) $order->get_id() );
 
         if ( is_wp_error( $transaction ) ) {
             $this->log( 'ChargX transact_bank_to_bank failed: ' . $transaction->get_error_message(), 'error' );
