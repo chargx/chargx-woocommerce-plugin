@@ -15,7 +15,6 @@
     threeDSUI: null,
     threeDSChallenged: false,
     paymentRedirectionFlow: false,
-    paymentRedirectSuccessUrl: null,
 
     init: function () {
       // Hook into WooCommerce checkout JS lifecycle for the card gateway.
@@ -62,8 +61,6 @@
 
       ChargXCardHandler.paymentRedirectionFlow =
         chargx_wc_params["payment_redirection_flow"];
-      ChargXCardHandler.paymentRedirectSuccessUrl =
-        chargx_wc_params["payment_redirect_success_url"];
 
       ChargXCardHandler.apiEndpoint = chargx_wc_params["api_endpoint"];
 

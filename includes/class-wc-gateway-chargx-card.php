@@ -15,7 +15,7 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
         $this->has_fields         = true;
         parent::__construct();
 
-        add_action('woocommerce_api_wc_gateway_chargx_card', [$this, 'handle_return']);
+        add_action('woocommerce_api_wc_gateway_chargx_card_success_url', [$this, 'handle_return']);
 
     }
 
@@ -128,8 +128,12 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
         // Payment redirection flow: create payment request and redirect to external checkout
         //
         if ( 'yes' === $this->get_option( 'payment_redirection_flow', 'no' ) ) {
+            // 
             $api = $this->get_api_client();
-            $payment_redirect_success_url = $this->payment_redirect_success_url;
+            $this->log( 'home_url: ' . home_url() );
+            $payment_redirect_success_url = home_url("/?wc-api=wc_gateway_chargx_card_success_url");
+            $this->log( 'payment_redirect_success_url: ' . $payment_redirect_success_url, 'info' );
+            
             $separator = ( strpos( $payment_redirect_success_url, '?' ) !== false ) ? '&' : '?';
             $payment_redirect_success_url .= $separator . 'order_id=' . $order->get_id();
             $response = $api->create_payment_request( $order->get_total(), $order->get_currency(), "card", $payment_redirect_success_url );

@@ -57,8 +57,6 @@ abstract class WC_Gateway_ChargX_Base extends WC_Payment_Gateway {
      * @var string yes|no
      */
     public $payment_redirection_flow;
-    public $payment_redirect_success_url;
-
     /**
      * Capture type: capture or authorize.
      *
@@ -95,7 +93,6 @@ abstract class WC_Gateway_ChargX_Base extends WC_Payment_Gateway {
         $this->enabled              = $this->get_option( 'enabled', 'no' );
         $this->testmode             = $this->get_option( 'testmode', 'no' );
         $this->payment_redirection_flow = $this->get_option( 'payment_redirection_flow', 'no' );
-        $this->payment_redirect_success_url = $this->get_option( 'payment_redirect_success_url');
         $this->publishable_key      = $this->get_option( 'publishable_key' );
         $this->test_publishable_key = $this->get_option( 'test_publishable_key' );
         $this->secret_key           = $this->get_option( 'secret_key' );
@@ -183,13 +180,6 @@ abstract class WC_Gateway_ChargX_Base extends WC_Payment_Gateway {
                 'label'       => __( 'Enable Payment Redirection Flow', 'chargx-woocommerce' ),
                 'default'     => 'yes',
                 'description' => __( 'Payment Redirection Flow', 'chargx-woocommerce' ),
-            ),
-            'payment_redirect_success_url' => array(
-                'title'       => __( 'Payment redirect success url', 'chargx-woocommerce' ),
-                'type'        => 'text',
-                'label'       => __( 'Redurect url for success payment', 'chargx-woocommerce' ),
-                'default'     => '',
-                'description' => __( 'Payment redirect success url', 'chargx-woocommerce' ),
             ),
             'developers_section' => array(
                 'title'       => __( 'Developers Settings', 'chargx-woocommerce' ),
