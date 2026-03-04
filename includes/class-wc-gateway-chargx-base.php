@@ -101,6 +101,8 @@ abstract class WC_Gateway_ChargX_Base extends WC_Payment_Gateway {
         $this->api_endpoint         = $this->get_option( 'api_endpoint', 'https://api.chargx.io' );
         $this->debug                = 'yes' === $this->get_option( 'debug', 'no' );
 
+        add_action( 'woocommerce_update_options_payment_gateways_' . $this->id, array( $this, 'process_admin_options' ) );
+
         // add 5% discount to the order for bank to bank transfer
         add_action( 'woocommerce_cart_calculate_fees', array( $this, 'chargx_bank_transfer_discount' ) );
         add_action( 'wp_footer', array( $this, 'chargx_refresh_checkout_on_payment_change' ) );
