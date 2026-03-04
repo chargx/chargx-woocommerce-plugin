@@ -50,6 +50,13 @@ abstract class WC_Gateway_ChargX_Base extends WC_Payment_Gateway {
      */
     public $testmode;
 
+
+    /**
+     * Double-redirect flow
+     *
+     * @var string yes|no
+     */
+    public $payment_redirection_flow;
     /**
      * Capture type: capture or authorize.
      *
@@ -63,6 +70,13 @@ abstract class WC_Gateway_ChargX_Base extends WC_Payment_Gateway {
      * @var ChargX_API_Client|null
      */
     protected $api_client;
+
+    /**
+     * ChargX api endpoint.
+     *
+     * @var ChargX_API_Client|null
+     */
+    protected $api_endpoint;
 
     public function __construct() {
         $this->supports = array(
@@ -78,14 +92,20 @@ abstract class WC_Gateway_ChargX_Base extends WC_Payment_Gateway {
         $this->description          = $this->get_option( 'description' );
         $this->enabled              = $this->get_option( 'enabled', 'no' );
         $this->testmode             = $this->get_option( 'testmode', 'no' );
+        $this->payment_redirection_flow = $this->get_option( 'payment_redirection_flow', 'no' );
         $this->publishable_key      = $this->get_option( 'publishable_key' );
         $this->test_publishable_key = $this->get_option( 'test_publishable_key' );
         $this->secret_key           = $this->get_option( 'secret_key' );
         $this->test_secret_key      = $this->get_option( 'test_secret_key' );
         $this->capture_type         = $this->get_option( 'capture_type', 'capture' );
+        $this->api_endpoint         = $this->get_option( 'api_endpoint', 'https://api.chargx.io' );
         $this->debug                = 'yes' === $this->get_option( 'debug', 'no' );
 
         add_action( 'woocommerce_update_options_payment_gateways_' . $this->id, array( $this, 'process_admin_options' ) );
+
+        // add 5% discount to the order for bank to bank transfer
+        add_action( 'woocommerce_cart_calculate_fees', array( $this, 'chargx_bank_transfer_discount' ) );
+        add_action( 'wp_footer', array( $this, 'chargx_refresh_checkout_on_payment_change' ) );
     }
 
     /**
@@ -110,7 +130,7 @@ abstract class WC_Gateway_ChargX_Base extends WC_Payment_Gateway {
                 'title'       => __( 'Description', 'chargx-woocommerce' ),
                 'type'        => 'textarea',
                 'description' => __( 'Description seen by customers at checkout.', 'chargx-woocommerce' ),
-                'default'     => __( 'Pay securely', 'chargx-woocommerce' ),
+                'default'     => __( 'For card payments and your security, click the “Place Order” button below to seamlessly complete your order through a private, encrypted verified card payment processor.', 'chargx-woocommerce' ),
                 'desc_tip'    => true,
             ),
             'testmode' => array(
@@ -154,6 +174,24 @@ abstract class WC_Gateway_ChargX_Base extends WC_Payment_Gateway {
                     'authorize' => __( 'Authorize only (capture later)', 'chargx-woocommerce' ),
                 ),
             ),
+            'payment_redirection_flow' => array(
+                'title'       => __( 'Payment Redirection Flow', 'chargx-woocommerce' ),
+                'type'        => 'checkbox',
+                'label'       => __( 'Enable Payment Redirection Flow', 'chargx-woocommerce' ),
+                'default'     => 'yes',
+                'description' => __( 'Payment Redirection Flow', 'chargx-woocommerce' ),
+            ),
+            'developers_section' => array(
+                'title'       => __( 'Developers Settings', 'chargx-woocommerce' ),
+                'type'        => 'title',
+                'description' => __( 'Developers related settings', 'chargx-woocommerce' ),
+            ),
+            'api_endpoint' => array(
+                'title'       => __( 'API Endpoint', 'chargx-woocommerce' ),
+                'type'        => 'text',
+                'description' => __( 'Your ChargX API endpoint.', 'chargx-woocommerce' ),
+                'default'     => 'https://api.chargx.io',
+            ),
             'debug' => array(
                 'title'       => __( 'Debug Log', 'chargx-woocommerce' ),
                 'type'        => 'checkbox',
@@ -170,6 +208,14 @@ abstract class WC_Gateway_ChargX_Base extends WC_Payment_Gateway {
      */
     public function get_api_client() {
         if ( $this->api_client instanceof ChargX_API_Client ) {
+
+            // reassign if changed
+            $this->api_client->set_testmode( 'yes' === $this->testmode );
+            $this->api_client->set_publishable_key( $use_test ? $this->test_publishable_key : $this->publishable_key );
+            $this->api_client->set_secret_key( $use_test ? $this->test_secret_key : $this->secret_key );
+            $this->api_client->set_endpoint( untrailingslashit($this->api_endpoint));
+            $this->api_client->set_admin_api_endpoint( trailingslashit(untrailingslashit($this->api_endpoint)) . 'admin');
+
             return $this->api_client;
         }
 
@@ -178,7 +224,7 @@ abstract class WC_Gateway_ChargX_Base extends WC_Payment_Gateway {
         $pub_key = $use_test ? $this->test_publishable_key : $this->publishable_key;
         $sec_key = $use_test ? $this->test_secret_key : $this->secret_key;
 
-        $this->api_client = new ChargX_API_Client( $pub_key, $sec_key, $use_test );
+        $this->api_client = new ChargX_API_Client($this->api_endpoint, $pub_key, $sec_key, $use_test);
 
         return $this->api_client;
     }
@@ -267,6 +313,51 @@ abstract class WC_Gateway_ChargX_Base extends WC_Payment_Gateway {
         $order->add_order_note( sprintf( __( 'ChargX refund processed. Reason: %s', 'chargx-woocommerce' ), $reason ) );
 
         return true;
+    }
+
+
+    function chargx_bank_transfer_discount( $cart ) {
+        // $this->log( 'chargx_bank_transfer_discount', 'info' );
+
+        if ( is_admin() && ! defined( 'DOING_AJAX' ) ) {
+            $this->log( 'chargx_bank_transfer_discount is_admin && ! defined( DOING_AJAX )', 'info' );
+            return;
+        }
+    
+        if ( ! WC()->session ) {
+            $this->log( 'chargx_bank_transfer_discount WC()->session not found', 'info' );
+            return;
+        }
+    
+        $chosen_payment_method = WC()->session->get( 'chosen_payment_method' );
+        // $this->log( 'chargx_bank_transfer_discount chosen_payment_method: ' . $chosen_payment_method, 'info' );
+
+        if ( $chosen_payment_method === 'chargx_bank' ) {
+    
+            // 5% from subtotal (products only)
+            $discount = $cart->get_subtotal() * 0.05;
+    
+            if ( $discount > 0 ) {
+                $cart->add_fee('5% Pay-By-Bank Discount', -$discount );
+            }
+        }
+    }
+
+    function chargx_refresh_checkout_on_payment_change() {
+        // $this->log( 'chargx_refresh_checkout_on_payment_change', 'info' );
+        if ( ! is_checkout() ) {
+            $this->log( 'chargx_refresh_checkout_on_payment_change not is_checkout', 'info' );
+            return;
+        }
+        ?>
+        <script type="text/javascript">
+            jQuery(function($){
+                $('form.checkout').on('change', 'input[name="payment_method"]', function(){
+                    $('body').trigger('update_checkout');
+                });
+            });
+        </script>
+        <?php
     }
 }
 

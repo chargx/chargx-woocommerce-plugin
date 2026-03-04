@@ -3,7 +3,7 @@
  * Plugin Name: ChargX Payment Gateway for WooCommerce
  * Description: Modern ChargX payment gateway for WooCommerce (Credit Cards + Apple/Google Pay, refunds, recurring).
  * Author: ChargX
- * Version: 0.18.4
+ * Version: 0.20.0
  * Requires at least: 5.8
  * Requires PHP: 7.4
  * WC requires at least: 4.0
@@ -34,6 +34,7 @@ function chargx_wc_init() {
     require_once CHARGX_WC_PLUGIN_PATH . 'includes/class-wc-gateway-chargx-card.php';
     require_once CHARGX_WC_PLUGIN_PATH . 'includes/class-wc-gateway-chargx-applepay.php';
     require_once CHARGX_WC_PLUGIN_PATH . 'includes/class-wc-gateway-chargx-googlepay.php';
+    require_once CHARGX_WC_PLUGIN_PATH . 'includes/class-wc-gateway-chargx-bank.php';
     require_once CHARGX_WC_PLUGIN_PATH . 'includes/class-chargx-subscriptions-helper.php';
 
     // Register gateways.
@@ -70,6 +71,7 @@ add_action( 'plugins_loaded', 'chargx_wc_init', 20 );
  */
 function chargx_wc_register_gateways( $gateways ) {
     $gateways[] = 'WC_Gateway_ChargX_Card';
+    $gateways[] = 'WC_Gateway_ChargX_Bank';
     $gateways[] = 'WC_Gateway_ChargX_ApplePay';
     $gateways[] = 'WC_Gateway_ChargX_GooglePay';
 
@@ -96,9 +98,33 @@ function chargx_wc_enqueue_assets() {
     );
 
     wp_enqueue_script(
+        'chargx-applepay-js',
+        CHARGX_WC_PLUGIN_URL . 'assets/js/chargx-applepay.js',
+        array( 'jquery' ),
+        CHARGX_WC_VERSION,
+        true
+    );
+
+    wp_enqueue_script(
+        'chargx-googlepay-js',
+        CHARGX_WC_PLUGIN_URL . 'assets/js/chargx-googlepay.js',
+        array( 'jquery' ),
+        CHARGX_WC_VERSION,
+        true
+    );
+
+    wp_enqueue_script(
+        'chargx-checkout-utils-js',
+        CHARGX_WC_PLUGIN_URL . 'assets/js/chargx-checkout-utils.js',
+        array(),
+        CHARGX_WC_VERSION,
+        true
+    );
+
+    wp_enqueue_script(
         'chargx-checkout-js',
         CHARGX_WC_PLUGIN_URL . 'assets/js/chargx-checkout.js',
-        array( 'jquery' ),
+        array( 'jquery', 'chargx-applepay-js', 'chargx-googlepay-js', 'chargx-checkout-utils-js' ),
         CHARGX_WC_VERSION,
         true
     );
@@ -144,6 +170,8 @@ function chargx_wc_enqueue_assets() {
         'apple_publishable'  => $apple_gateway ? $apple_gateway->get_publishable_key() : '',
         'google_publishable' => $google_gateway ? $google_gateway->get_publishable_key() : '',
         'card_testmode'      => $card_gateway && 'yes' === $card_gateway->get_option( 'testmode', 'no' ) ? 'yes' : 'no',
+        'payment_redirection_flow' => $card_gateway && 'yes' === $card_gateway->get_option( 'payment_redirection_flow', 'no' ) ? 'yes' : 'no',
+        'api_endpoint'       => $card_gateway ? $card_gateway->get_option( 'api_endpoint' ) : 'https://api.chargx.io',
         'apple_testmode'     => $apple_gateway && 'yes' === $apple_gateway->get_option( 'testmode', 'no' ) ? 'yes' : 'no',
         'google_testmode'    => $google_gateway && 'yes' === $google_gateway->get_option( 'testmode', 'no' ) ? 'yes' : 'no',
         'i18n'               => array(
@@ -157,6 +185,8 @@ function chargx_wc_enqueue_assets() {
         'version'            => CHARGX_WC_VERSION,
     );
 
+    wp_localize_script( 'chargx-applepay-js', 'chargx_wc_params', $params );
+    wp_localize_script( 'chargx-googlepay-js', 'chargx_wc_params', $params );
     wp_localize_script( 'chargx-checkout-js', 'chargx_wc_params', $params );
 }
 
