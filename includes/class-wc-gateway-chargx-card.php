@@ -17,7 +17,6 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
 
         add_action('woocommerce_api_wc_gateway_chargx_card_success_url', [$this, 'handle_return']);
         add_action('woocommerce_api_wc_gateway_chargx_card_success_url_webhook', [$this, 'handle_webhook_success_payment']);
-
     }
 
     /**
@@ -269,30 +268,41 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
         );
     }
 
+    /**
+     * Applies ChargX return data to the order (payment complete + display id).
+     */
+    protected function complete_order( $order_id, $chargx_order_id = null, $chargx_order_display_id = null ) {
+        $order = wc_get_order( $order_id );
+        if ( ! $order ) {
+            return null;
+        }
+
+        if ( ! empty( $chargx_order_id ) ) {
+            $order->payment_complete( $chargx_order_id );
+        }
+        if ( ! empty( $chargx_order_display_id ) ) {
+            $order->update_meta_data( '_chargx_order_display_id', $chargx_order_display_id );
+        }
+
+        $order->save();
+        return $order;
+    }
+
     // return from Payment Form redirection flow
     public function handle_return() {
         // http://localhost:8080/?wc-api=wc_gateway_chargx_card&order_id=123
+        $order_id              = absint( $_GET['order_id'] ?? 0 );
+        $chargx_order_id       = isset( $_GET['chargx_order_id'] ) ? sanitize_text_field( wp_unslash( $_GET['chargx_order_id'] ) ) : null;
+        $chargx_order_display_id = isset( $_GET['chargx_order_display_id'] ) ? sanitize_text_field( wp_unslash( $_GET['chargx_order_display_id'] ) ) : null;
+
         $this->log( 'handle_return: order_id: ' . $order_id, 'info' );
-        $this->log( 'handle_return: chargx_order_id: ' . $_GET['chargx_order_id'], 'info' );
-        $this->log( 'handle_return: chargx_order_display_id: ' . $_GET['chargx_order_display_id'], 'info' );
+        $this->log( 'handle_return: chargx_order_id: ' . $chargx_order_id, 'info' );
+        $this->log( 'handle_return: chargx_order_display_id: ' . $chargx_order_display_id, 'info' );
 
-        // get order
-        $order_id = absint($_GET['order_id'] ?? 0);  
-        $order = wc_get_order($order_id);
-        if (!$order) wp_die('Invalid order', 400);
-
-         // add metadata to order
-        if (!empty($_GET['chargx_order_id'])) {
-            $order->payment_complete( $_GET['chargx_order_id'] );
+        $order = $this->complete_order( $order_id, $chargx_order_id, $chargx_order_display_id );
+        if ( ! $order ) {
+            wp_die( 'Invalid order', 400 );
         }
-        if (!empty($_GET['chargx_order_display_id'])) {
-            $order->update_meta_data( '_chargx_order_display_id', $_GET['chargx_order_display_id'] );
-        }
-
-        // // Optionally: do lightweight verification here, or just mark "needs verification"
-        // $order->update_meta_data( '_chargx_needs_finalize', 'yes' );
-
-        $order->save();
 
         $this->log( 'handle_return: card2', 'info' );
 
@@ -307,7 +317,22 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
     // handle webhook success payment
     public function handle_webhook_success_payment() {
         $this->log( 'handle_webhook_success_payment', 'info' );
+        // $this->log('handle_webhook_success_payment headers: ' . wp_json_encode(getallheaders()), 'info');
 
-        $order_id = absint($_POST['data']["object"] ?? 0);  
+        $raw_body = file_get_contents('php://input');
+        // $this->log('raw_body: ' . $raw_body, 'info');
+    
+        $payload = json_decode($raw_body, true);
+        // $this->log('payload: ' . wp_json_encode($payload), 'info');
+    
+        $order_id = absint($payload['data']['object']['external_order_id'] ?? 0);
+        $chargx_order_id = $payload['data']['object']['order_id'] ?? null;
+        $chargx_order_display_id = $payload['data']['object']['order_display_id'] ?? null;
+
+        $this->log('handle_webhook_success_payment. order_id: ' . $order_id, 'info');
+        $this->log('handle_webhook_success_payment. chargx_order_id: ' . $chargx_order_id, 'info');
+        $this->log('handle_webhook_success_payment. chargx_order_display_id: ' . $chargx_order_display_id, 'info');
+
+        $order = $this->complete_order( $order_id, $chargx_order_id, $chargx_order_display_id );
     }
 }
