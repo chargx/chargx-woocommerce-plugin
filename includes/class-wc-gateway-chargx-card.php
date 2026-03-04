@@ -292,7 +292,7 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
     // return from Payment Form redirection flow
     public function handle_return() {
         // http://localhost:8080/?wc-api=wc_gateway_chargx_card_success_url&order_id=123
-        $order_id              = absint( $_GET['order_id'] ?? 0 );
+        $order_id              = absint( $_GET[' '] ?? 0 );
         $chargx_order_id       = isset( $_GET['chargx_order_id'] ) ? sanitize_text_field( wp_unslash( $_GET['chargx_order_id'] ) ) : null;
         $chargx_order_display_id = isset( $_GET['chargx_order_display_id'] ) ? sanitize_text_field( wp_unslash( $_GET['chargx_order_display_id'] ) ) : null;
 
@@ -324,7 +324,7 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
         $this->log('render_finalizing_page. order_id: ' . $order_id, 'info');
 
         $status_url = home_url( '/?wc-api=chargx_order_status&order_id=' . absint( $order_id ) );
-        $thankyou_url = esc_url( $thankyou_url );
+        // $thankyou_url = esc_url( $thankyou_url );
         ?>
         <!DOCTYPE html>
         <html <?php language_attributes(); ?>>
@@ -355,11 +355,14 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
                         fetch(statusUrl)
                             .then(function(r) { return r.json(); })
                             .then(function(data) {
+                                console.log('checkStatus. data: ' + JSON.stringify(data));
                                 if (data.completed) {
                                     window.location.href = thankYouUrl;
                                 }
                             })
-                            .catch(function() {});
+                            .catch(function(err) {
+                                console.error('checkStatus. error', err);
+                            });
                     }
 
                     checkStatus();
