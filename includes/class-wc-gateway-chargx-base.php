@@ -101,8 +101,6 @@ abstract class WC_Gateway_ChargX_Base extends WC_Payment_Gateway {
         $this->api_endpoint         = $this->get_option( 'api_endpoint', 'https://api.chargx.io' );
         $this->debug                = 'yes' === $this->get_option( 'debug', 'no' );
 
-        add_action( 'woocommerce_update_options_payment_gateways_' . $this->id, array( $this, 'process_admin_options' ) );
-
         // add 5% discount to the order for bank to bank transfer
         add_action( 'woocommerce_cart_calculate_fees', array( $this, 'chargx_bank_transfer_discount' ) );
         add_action( 'wp_footer', array( $this, 'chargx_refresh_checkout_on_payment_change' ) );
@@ -208,6 +206,14 @@ abstract class WC_Gateway_ChargX_Base extends WC_Payment_Gateway {
      */
     public function get_api_client() {
         if ( $this->api_client instanceof ChargX_API_Client ) {
+
+            // reassign if changed
+            $this->api_client->set_testmode( 'yes' === $this->testmode );
+            $this->api_client->set_publishable_key( $use_test ? $this->test_publishable_key : $this->publishable_key );
+            $this->api_client->set_secret_key( $use_test ? $this->test_secret_key : $this->secret_key );
+            $this->api_client->set_endpoint( untrailingslashit($this->api_endpoint));
+            $this->api_client->set_admin_api_endpoint( trailingslashit(untrailingslashit($this->api_endpoint)) . 'admin');
+
             return $this->api_client;
         }
 
@@ -336,7 +342,7 @@ abstract class WC_Gateway_ChargX_Base extends WC_Payment_Gateway {
     }
 
     function chargx_refresh_checkout_on_payment_change() {
-        $this->log( 'chargx_refresh_checkout_on_payment_change', 'info' );
+        // $this->log( 'chargx_refresh_checkout_on_payment_change', 'info' );
         if ( ! is_checkout() ) {
             $this->log( 'chargx_refresh_checkout_on_payment_change not is_checkout', 'info' );
             return;

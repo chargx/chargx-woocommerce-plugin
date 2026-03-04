@@ -106,6 +106,31 @@ class ChargX_API_Client {
     }
 
     /**
+     * Generic GET to Admin API with secret key.
+     */
+    protected function admin_get( $path, $args = array() ) {
+        if ( empty( $this->secret_key ) ) {
+            return new WP_Error( 'chargx_no_secret', __( 'ChargX secret key is missing.', 'chargx-woocommerce' ) );
+        }
+
+        $url = trailingslashit( $this->admin_endpoint ) . ltrim( $path, '/' );
+        $url = add_query_arg( $args, $url );
+
+        $response = wp_remote_get(
+            $url,
+            array(
+                'timeout' => 30,
+                'headers' => array(
+                    'Authorization' => 'Basic ' . $this->secret_key,
+                    'Accept'        => 'application/json',
+                ),
+            )
+        );
+
+        return $this->handle_response( $response );
+    }
+
+    /**
      * Generic POST to Admin API with secret key.
      */
     protected function admin_post( $path, $body = array() ) {
@@ -345,6 +370,42 @@ class ChargX_API_Client {
      */
     public function payout( $payload ) {
         return $this->admin_post( 'payout', $payload );
+    }
+
+    /**
+     * Retrieve webhooks (Admin API).
+     *
+     * GET /admin/webhook
+     *
+     * @return array|WP_Error Response with webhook_endpoints key, or error.
+     */
+    public function get_webhooks() {
+        return $this->admin_get( 'webhook' );
+    }
+
+    /**
+     * Create webhook (Admin API).
+     *
+     * POST /admin/webhook
+     *
+     * @param string   $url         Webhook URL.
+     * @param string   $name        Webhook name (e.g. "WOO").
+     * @param string[] $events      Event names (e.g. ["payment.succeeded"]).
+     * @param bool     $enabled     Whether the webhook is enabled.
+     * @param string   $environment "test" or "live".
+     * @return array|WP_Error
+     */
+    public function create_webhook( $url, $name = 'WOO', $events = array( 'payment.succeeded' ), $enabled = true) {
+        $environment = $this->testmode ? 'test' : 'live';
+        
+        $body = array(
+            'url'         => $url,
+            'name'        => $name,
+            'events'      => $events,
+            'enabled'     => (bool) $enabled,
+            'environment' => (string) $environment,
+        );
+        return $this->admin_post( 'webhook', $body );
     }
 
     /**

@@ -18,6 +18,63 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
         add_action('woocommerce_api_wc_gateway_chargx_card_success_url', [$this, 'handle_return']);
         add_action('woocommerce_api_wc_gateway_chargx_card_success_url_webhook', [$this, 'handle_webhook_success_payment']);
         add_action('woocommerce_api_chargx_order_status', [$this, 'ajax_order_status']);
+
+        add_action( 'woocommerce_update_options_payment_gateways_' . $this->id, [$this, 'process_admin_options'] );
+    }
+
+    public function process_admin_options() {
+        $this->log( 'process_admin_options', 'info' );
+
+        parent::process_admin_options();
+
+        $secret_key = $this->get_option('secret_key');
+        $test_secret_key = $this->get_option('test_secret_key');
+
+        if (!$secret_key && !$test_secret_key) {
+            $this->log( 'process_admin_options ignore because no secret key defined', 'info' );
+            return;
+        }
+        
+        $this->register_webhook( );
+    }
+
+    /**
+     * Register webhook with ChargX if it does not already exist (for the given environment)
+     */
+    private function register_webhook( ) {
+        $this->log( 'register_webhook ', 'info' );
+
+        $api = $this->get_api_client();
+        $webhook_url = home_url( '/?wc-api=wc_gateway_chargx_card_success_url_webhook' );
+
+        $existing = $api->get_webhooks();
+        if ( is_wp_error( $existing ) ) {
+            $this->log( 'register_webhook get_webhooks error: ' . $existing->get_error_message(), 'error' );
+            return;
+        }
+
+        $endpoints = isset( $existing['webhook_endpoints'] ) && is_array( $existing['webhook_endpoints'] )
+            ? $existing['webhook_endpoints']
+            : array();
+        foreach ( $endpoints as $endpoint ) {
+            $url = isset( $endpoint['url'] ) ? $endpoint['url'] : '';
+            if ( $url === $webhook_url ) {
+                $this->log( 'register_webhook already exists: ' . $webhook_url, 'info' );
+                return;
+            }
+        }
+
+        $result = $api->create_webhook(
+            $webhook_url,
+            'WOO',
+            array( 'payment.succeeded' ),
+            true
+        );
+        if ( is_wp_error( $result ) ) {
+            $this->log( 'register_webhook create error: ' . $result->get_error_message(), 'error' );
+            return;
+        }
+        $this->log( 'register_webhook created: ' . $webhook_url, 'info' );
     }
 
     /**
@@ -324,7 +381,6 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
         $this->log('render_finalizing_page. order_id: ' . $order_id, 'info');
 
         $status_url = home_url( '/?wc-api=chargx_order_status&order_id=' . absint( $order_id ) );
-        // $thankyou_url = esc_url( $thankyou_url );
         ?>
         <!DOCTYPE html>
         <html <?php language_attributes(); ?>>
