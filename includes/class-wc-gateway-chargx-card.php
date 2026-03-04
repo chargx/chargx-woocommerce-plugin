@@ -356,7 +356,7 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
     // return from Payment Form redirection flow
     public function handle_return() {
         // http://localhost:8080/?wc-api=wc_gateway_chargx_card_success_url&order_id=123
-        $order_id              = absint( $_GET[' '] ?? 0 );
+        $order_id              = absint( $_GET['order_id'] ?? 0 );
         $chargx_order_id       = isset( $_GET['chargx_order_id'] ) ? sanitize_text_field( wp_unslash( $_GET['chargx_order_id'] ) ) : null;
         $chargx_order_display_id = isset( $_GET['chargx_order_display_id'] ) ? sanitize_text_field( wp_unslash( $_GET['chargx_order_display_id'] ) ) : null;
 
