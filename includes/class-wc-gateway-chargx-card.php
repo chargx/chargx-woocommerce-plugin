@@ -17,6 +17,7 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
 
         add_action('woocommerce_api_wc_gateway_chargx_card_success_url', [$this, 'handle_return']);
         add_action('woocommerce_api_wc_gateway_chargx_card_success_url_webhook', [$this, 'handle_webhook_success_payment']);
+        add_action('woocommerce_api_chargx_order_status', [$this, 'ajax_order_status']);
     }
 
     /**
@@ -290,7 +291,7 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
 
     // return from Payment Form redirection flow
     public function handle_return() {
-        // http://localhost:8080/?wc-api=wc_gateway_chargx_card&order_id=123
+        // http://localhost:8080/?wc-api=wc_gateway_chargx_card_success_url&order_id=123
         $order_id              = absint( $_GET['order_id'] ?? 0 );
         $chargx_order_id       = isset( $_GET['chargx_order_id'] ) ? sanitize_text_field( wp_unslash( $_GET['chargx_order_id'] ) ) : null;
         $chargx_order_display_id = isset( $_GET['chargx_order_display_id'] ) ? sanitize_text_field( wp_unslash( $_GET['chargx_order_display_id'] ) ) : null;
@@ -304,14 +305,91 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
             wp_die( 'Invalid order', 400 );
         }
 
-        $this->log( 'handle_return: card2', 'info' );
+        $thankyou = $this->get_return_url( $order );
 
-        // Go to the built-in thank you page
-        // $thankyou = add_query_arg(['chargx' => 'processing'], $this->get_return_url($order));
-        $thankyou = $this->get_return_url($order);
+        // Allow polling for this order for 5 minutes (only from this return flow).
+        set_transient( 'chargx_return_poll_' . $order_id, 1, 5 * MINUTE_IN_SECONDS );
 
-        wp_safe_redirect($thankyou);
+        $this->render_finalizing_page( $order_id, $thankyou );
         exit;
+    }
+
+    /**
+     * Renders the "Finalizing your order" intermediate page with loader and status polling.
+     *
+     * @param int    $order_id   WooCommerce order ID.
+     * @param string $thankyou_url URL to redirect to when order is completed.
+     */
+    protected function render_finalizing_page( $order_id, $thankyou_url ) {
+        $this->log('render_finalizing_page. order_id: ' . $order_id, 'info');
+
+        $status_url = home_url( '/?wc-api=chargx_order_status&order_id=' . absint( $order_id ) );
+        $thankyou_url = esc_url( $thankyou_url );
+        ?>
+        <!DOCTYPE html>
+        <html <?php language_attributes(); ?>>
+        <head>
+            <meta charset="<?php bloginfo( 'charset' ); ?>">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <title><?php esc_html_e( 'Finalizing your order', 'chargx-woocommerce' ); ?></title>
+            <style>
+                body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, sans-serif; margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #f5f5f5; }
+                .chargx-finalizing { text-align: center; padding: 2rem; }
+                .chargx-finalizing p { color: #333; font-size: 1.125rem; margin-bottom: 1.5rem; }
+                .chargx-loader { width: 40px; height: 40px; border: 3px solid #e0e0e0; border-top-color: #333; border-radius: 50%; animation: chargx-spin 0.8s linear infinite; margin: 0 auto 1.5rem; }
+                @keyframes chargx-spin { to { transform: rotate(360deg); } }
+            </style>
+        </head>
+        <body>
+            <div class="chargx-finalizing">
+                <div class="chargx-loader" aria-hidden="true"></div>
+                <p><?php esc_html_e( 'Finalizing your order and updating inventory...', 'chargx-woocommerce' ); ?></p>
+            </div>
+            <script>
+                (function() {
+                    var statusUrl = <?php echo wp_json_encode( $status_url ); ?>;
+                    var thankYouUrl = <?php echo wp_json_encode( $thankyou_url ); ?>;
+                    var interval = 2000;
+
+                    function checkStatus() {
+                        fetch(statusUrl)
+                            .then(function(r) { return r.json(); })
+                            .then(function(data) {
+                                if (data.completed) {
+                                    window.location.href = thankYouUrl;
+                                }
+                            })
+                            .catch(function() {});
+                    }
+
+                    checkStatus();
+                    setInterval(checkStatus, interval);
+                })();
+            </script>
+        </body>
+        </html>
+        <?php
+    }
+
+    /**
+     * AJAX handler: returns order status for the finalizing-page poll. Order is "completed" when status is processing or completed.
+     */
+    public function ajax_order_status() {
+        $order_id = absint( $_GET['order_id'] ?? 0 );
+        if ( ! $order_id ) {
+            wp_send_json( array( 'completed' => false, 'status' => '' ) );
+        }
+        if ( ! get_transient( 'chargx_return_poll_' . $order_id ) ) {
+            wp_send_json( array( 'completed' => false, 'status' => '' ) );
+        }
+        $order = wc_get_order( $order_id );
+        if ( ! $order ) {
+            wp_send_json( array( 'completed' => false, 'status' => '' ) );
+        }
+        $status = $order->get_status();
+        $this->log('ajax_order_status. status: ' . $status, 'info');
+        $completed = in_array( $status, array( 'processing', 'completed' ), true );
+        wp_send_json( array( 'completed' => $completed, 'status' => $status ) );
     }
 
     // handle webhook success payment
