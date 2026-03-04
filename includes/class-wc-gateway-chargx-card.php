@@ -16,6 +16,7 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
         parent::__construct();
 
         add_action('woocommerce_api_wc_gateway_chargx_card_success_url', [$this, 'handle_return']);
+        add_action('woocommerce_api_wc_gateway_chargx_card_success_url_webhook', [$this, 'handle_webhook_success_payment']);
 
     }
 
@@ -159,6 +160,9 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
                 $checkout_url = add_query_arg( $billing_params, $checkout_url );
             }
 
+            // add external order id to the checkout url
+            $checkout_url = add_query_arg( array('external_order_id' => $order->get_id()), $checkout_url );
+
             // by default order status is "pending" (Pending payment) 
             // so no need to do anything additional here
             // $order->get_status();
@@ -265,7 +269,7 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
         );
     }
 
-    // return from payment redirection flow
+    // return from Payment Form redirection flow
     public function handle_return() {
         // http://localhost:8080/?wc-api=wc_gateway_chargx_card&order_id=123
         $this->log( 'handle_return: order_id: ' . $order_id, 'info' );
@@ -298,5 +302,12 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
 
         wp_safe_redirect($thankyou);
         exit;
+    }
+
+    // handle webhook success payment
+    public function handle_webhook_success_payment() {
+        $this->log( 'handle_webhook_success_payment', 'info' );
+
+        $order_id = absint($_POST['data']["object"] ?? 0);  
     }
 }
