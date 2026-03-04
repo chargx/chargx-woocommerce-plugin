@@ -250,6 +250,7 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
         );
     }
 
+    // return from payment redirection flow
     public function handle_return() {
         // http://localhost:8080/?wc-api=wc_gateway_chargx_card&order_id=123
         $this->log( 'handle_return: order_id: ' . $order_id, 'info' );
