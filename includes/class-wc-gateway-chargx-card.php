@@ -144,6 +144,21 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
             $payment_request = $response['payment_request'];
             $checkout_url = $payment_request['checkout_url'] . '?success_url=' . urlencode($payment_redirect_success_url);
 
+            // Pass billing params to payment form (from checkout form / order).
+            $billing_params = array_filter(array(
+                'email'          => $order->get_billing_email(),
+                'phone-number'   => $order->get_billing_phone(),
+                'street-address' => $order->get_billing_address_1(),
+                'unit-address'   => $order->get_billing_address_2(),
+                'city'           => $order->get_billing_city(),
+                'state'          => $order->get_billing_state(),
+                'zip-code'       => $order->get_billing_postcode(),
+                'country'        => $order->get_billing_country(),
+            ));
+            if ( ! empty( $billing_params ) ) {
+                $checkout_url = add_query_arg( $billing_params, $checkout_url );
+            }
+
             // by default order status is "pending" (Pending payment) 
             // so no need to do anything additional here
             // $order->get_status();

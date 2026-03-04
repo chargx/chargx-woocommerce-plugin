@@ -309,7 +309,7 @@ abstract class WC_Gateway_ChargX_Base extends WC_Payment_Gateway {
 
 
     function chargx_bank_transfer_discount( $cart ) {
-        $this->log( 'chargx_bank_transfer_discount', 'info' );
+        // $this->log( 'chargx_bank_transfer_discount', 'info' );
 
         if ( is_admin() && ! defined( 'DOING_AJAX' ) ) {
             $this->log( 'chargx_bank_transfer_discount is_admin && ! defined( DOING_AJAX )', 'info' );
@@ -322,7 +322,7 @@ abstract class WC_Gateway_ChargX_Base extends WC_Payment_Gateway {
         }
     
         $chosen_payment_method = WC()->session->get( 'chosen_payment_method' );
-        $this->log( 'chargx_bank_transfer_discount chosen_payment_method: ' . $chosen_payment_method, 'info' );
+        // $this->log( 'chargx_bank_transfer_discount chosen_payment_method: ' . $chosen_payment_method, 'info' );
 
         if ( $chosen_payment_method === 'chargx_bank' ) {
     
