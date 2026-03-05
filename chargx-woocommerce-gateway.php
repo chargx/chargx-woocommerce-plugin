@@ -3,7 +3,7 @@
  * Plugin Name: ChargX Payment Gateway for WooCommerce
  * Description: Modern ChargX payment gateway for WooCommerce (Credit Cards + Apple/Google Pay, refunds, recurring).
  * Author: ChargX
- * Version: 0.20.0
+ * Version: 0.20.6
  * Requires at least: 5.8
  * Requires PHP: 7.4
  * WC requires at least: 4.0
@@ -60,6 +60,11 @@ function chargx_wc_init() {
             );
         }
     });
+
+    // add 5% discount to the order for bank to bank transfer
+    add_action( 'woocommerce_cart_calculate_fees', 'chargx_bank_transfer_discount' );
+    // That hook injects JavaScript into the page footer to refresh the checkout when the payment method is changed
+    add_action( 'wp_footer', 'chargx_refresh_checkout_on_payment_change' );
 }
 add_action( 'plugins_loaded', 'chargx_wc_init', 20 );
 
@@ -224,5 +229,48 @@ function chargx_wc_applepay_validate_merchant() {
     }
 
     wp_send_json_success( $session );
+}
+
+function chargx_bank_transfer_discount( $cart ) {
+    //wc_get_logger()->info('chargx_bank_transfer_discount', ['source' => 'chargx-woocommerce']);
+
+    if ( is_admin() && ! defined( 'DOING_AJAX' ) ) {
+        // $this->log( 'chargx_bank_transfer_discount is_admin && ! defined( DOING_AJAX )', 'info' );
+        return;
+    }
+
+    if ( ! WC()->session ) {
+        // $this->log( 'chargx_bank_transfer_discount WC()->session not found', 'info' );
+        return;
+    }
+
+    $chosen_payment_method = WC()->session->get( 'chosen_payment_method' );
+    wc_get_logger()->info('chargx_bank_transfer_discount chosen_payment_method: ' . $chosen_payment_method, ['source' => 'chargx-woocommerce']);
+
+    if ( $chosen_payment_method === 'chargx_bank' ) {
+
+        // 5% from subtotal (products only)
+        $discount = $cart->get_subtotal() * 0.05;
+        // $this->log( 'chargx_bank_transfer_discount discount: ' . $discount, 'info' );
+
+        if ( $discount > 0 ) {
+            $cart->add_fee('5% Pay-By-Bank Discount', -$discount );
+        }
+    }
+}
+
+function chargx_refresh_checkout_on_payment_change() {
+    if ( ! is_checkout() ) {
+        return;
+    }
+    ?>
+    <script type="text/javascript">
+        jQuery(function($){
+            $('form.checkout').on('change', 'input[name="payment_method"]', function(){
+                $('body').trigger('update_checkout');
+            });
+        });
+    </script>
+    <?php
 }
 

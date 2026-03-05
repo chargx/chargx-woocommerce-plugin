@@ -102,10 +102,6 @@ abstract class WC_Gateway_ChargX_Base extends WC_Payment_Gateway {
         $this->debug                = 'yes' === $this->get_option( 'debug', 'no' );
 
         add_action( 'woocommerce_update_options_payment_gateways_' . $this->id, array( $this, 'process_admin_options' ) );
-
-        // add 5% discount to the order for bank to bank transfer
-        add_action( 'woocommerce_cart_calculate_fees', array( $this, 'chargx_bank_transfer_discount' ) );
-        add_action( 'wp_footer', array( $this, 'chargx_refresh_checkout_on_payment_change' ) );
     }
 
     /**
@@ -313,51 +309,6 @@ abstract class WC_Gateway_ChargX_Base extends WC_Payment_Gateway {
         $order->add_order_note( sprintf( __( 'ChargX refund processed. Reason: %s', 'chargx-woocommerce' ), $reason ) );
 
         return true;
-    }
-
-
-    function chargx_bank_transfer_discount( $cart ) {
-        // $this->log( 'chargx_bank_transfer_discount', 'info' );
-
-        if ( is_admin() && ! defined( 'DOING_AJAX' ) ) {
-            $this->log( 'chargx_bank_transfer_discount is_admin && ! defined( DOING_AJAX )', 'info' );
-            return;
-        }
-    
-        if ( ! WC()->session ) {
-            $this->log( 'chargx_bank_transfer_discount WC()->session not found', 'info' );
-            return;
-        }
-    
-        $chosen_payment_method = WC()->session->get( 'chosen_payment_method' );
-        // $this->log( 'chargx_bank_transfer_discount chosen_payment_method: ' . $chosen_payment_method, 'info' );
-
-        if ( $chosen_payment_method === 'chargx_bank' ) {
-    
-            // 5% from subtotal (products only)
-            $discount = $cart->get_subtotal() * 0.05;
-    
-            if ( $discount > 0 ) {
-                $cart->add_fee('5% Pay-By-Bank Discount', -$discount );
-            }
-        }
-    }
-
-    function chargx_refresh_checkout_on_payment_change() {
-        // $this->log( 'chargx_refresh_checkout_on_payment_change', 'info' );
-        if ( ! is_checkout() ) {
-            $this->log( 'chargx_refresh_checkout_on_payment_change not is_checkout', 'info' );
-            return;
-        }
-        ?>
-        <script type="text/javascript">
-            jQuery(function($){
-                $('form.checkout').on('change', 'input[name="payment_method"]', function(){
-                    $('body').trigger('update_checkout');
-                });
-            });
-        </script>
-        <?php
     }
 }
 
