@@ -29,9 +29,6 @@ class WC_Gateway_ChargX_Bank extends WC_Gateway_ChargX_Base {
     public function init_form_fields() {
         parent::init_form_fields();
 
-        // remove capture_type from form fields
-        unset( $this->form_fields['capture_type'] );
-
         if ( isset( $this->form_fields['title'] ) ) {
             $this->form_fields['title']['default'] = __( 'Pay-By-Bank - SAVE 5%', 'chargx-woocommerce' );
         }

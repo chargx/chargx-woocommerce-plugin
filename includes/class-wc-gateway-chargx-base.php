@@ -97,7 +97,7 @@ abstract class WC_Gateway_ChargX_Base extends WC_Payment_Gateway {
         $this->test_publishable_key = $this->get_option( 'test_publishable_key' );
         $this->secret_key           = $this->get_option( 'secret_key' );
         $this->test_secret_key      = $this->get_option( 'test_secret_key' );
-        $this->capture_type         = $this->get_option( 'capture_type', 'capture' );
+        $this->capture_type         = 'capture';
         $this->api_endpoint         = $this->get_option( 'api_endpoint', 'https://api.chargx.io' );
         $this->debug                = 'yes' === $this->get_option( 'debug', 'no' );
 
@@ -159,16 +159,6 @@ abstract class WC_Gateway_ChargX_Base extends WC_Payment_Gateway {
                 'type'        => 'password',
                 'description' => __( 'Your ChargX test Secret API key for sandbox Admin API.', 'chargx-woocommerce' ),
                 'default'     => '',
-            ),
-            'capture_type' => array(
-                'title'       => __( 'Capture Method', 'chargx-woocommerce' ),
-                'type'        => 'select',
-                'description' => __( 'Choose whether to immediately capture funds or only authorize.', 'chargx-woocommerce' ),
-                'default'     => 'capture',
-                'options'     => array(
-                    'capture'   => __( 'Authorize and Capture (sale)', 'chargx-woocommerce' ),
-                    'authorize' => __( 'Authorize only (capture later)', 'chargx-woocommerce' ),
-                ),
             ),
             'developers_section' => array(
                 'title'       => __( 'Developers Settings', 'chargx-woocommerce' ),
