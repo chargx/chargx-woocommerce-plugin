@@ -92,7 +92,7 @@ abstract class WC_Gateway_ChargX_Base extends WC_Payment_Gateway {
         $this->description          = $this->get_option( 'description' );
         $this->enabled              = $this->get_option( 'enabled', 'no' );
         $this->testmode             = $this->get_option( 'testmode', 'no' );
-        $this->payment_redirection_flow = $this->get_option( 'payment_redirection_flow', 'no' );
+        $this->payment_redirection_flow = "yes";
         $this->publishable_key      = $this->get_option( 'publishable_key' );
         $this->test_publishable_key = $this->get_option( 'test_publishable_key' );
         $this->secret_key           = $this->get_option( 'secret_key' );
@@ -133,7 +133,7 @@ abstract class WC_Gateway_ChargX_Base extends WC_Payment_Gateway {
                 'title'       => __( 'Sandbox / Test Mode', 'chargx-woocommerce' ),
                 'type'        => 'checkbox',
                 'label'       => __( 'Enable Test Mode (use test keys & sandbox store)', 'chargx-woocommerce' ),
-                'default'     => 'yes',
+                'default'     => 'no',
                 'description' => __( 'Use your ChargX sandbox store & test card numbers while this is enabled.', 'chargx-woocommerce' ),
             ),
             'publishable_key' => array(
@@ -169,13 +169,6 @@ abstract class WC_Gateway_ChargX_Base extends WC_Payment_Gateway {
                     'capture'   => __( 'Authorize and Capture (sale)', 'chargx-woocommerce' ),
                     'authorize' => __( 'Authorize only (capture later)', 'chargx-woocommerce' ),
                 ),
-            ),
-            'payment_redirection_flow' => array(
-                'title'       => __( 'Payment Redirection Flow', 'chargx-woocommerce' ),
-                'type'        => 'checkbox',
-                'label'       => __( 'Enable Payment Redirection Flow', 'chargx-woocommerce' ),
-                'default'     => 'yes',
-                'description' => __( 'Payment Redirection Flow', 'chargx-woocommerce' ),
             ),
             'developers_section' => array(
                 'title'       => __( 'Developers Settings', 'chargx-woocommerce' ),

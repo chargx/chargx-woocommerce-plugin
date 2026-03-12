@@ -123,7 +123,7 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
             echo '<p>' . wp_kses_post( $this->description ) . '</p>';
         }
 
-        if ( 'yes' !== $this->get_option( 'payment_redirection_flow', 'no' ) ) {
+        if ( 'yes' !== $this->payment_redirection_flow ) {
             ?>
         <fieldset id="wc-<?php echo esc_attr( $this->id ); ?>-cc-form" class="wc-chargx-card-form wc-payment-form">
             <div class="chargx-card-row">
@@ -192,7 +192,7 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
 
         // Payment redirection flow: create payment request and redirect to external checkout
         //
-        if ( 'yes' === $this->get_option( 'payment_redirection_flow', 'no' ) ) {
+        if ( 'yes' === $this->payment_redirection_flow ) {
             // 
             $api = $this->get_api_client();
             $this->log( 'home_url: ' . home_url() );

@@ -60,7 +60,7 @@
       );
 
       ChargXCardHandler.paymentRedirectionFlow =
-        chargx_wc_params["payment_redirection_flow"];
+        chargx_wc_params["payment_redirection_flow"] === "yes";
 
       ChargXCardHandler.apiEndpoint = chargx_wc_params["api_endpoint"];
 
@@ -122,7 +122,7 @@
 
       // Payment redirection flow: create payment request and redirect to external checkout
       //
-      if (ChargXCardHandler.paymentRedirectionFlow === "yes") {
+      if (ChargXCardHandler.paymentRedirectionFlow) {
         form.trigger("submit");
         return;
       }

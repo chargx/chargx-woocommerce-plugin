@@ -29,3 +29,8 @@ services:
 volumes:
   wordpress:
   db:
+
+# remove plugin data from db:
+#
+# mysql -h db -u exampleuser -pexamplepass exampledb
+# DELETE FROM wp_options WHERE option_name LIKE '%chargx%';

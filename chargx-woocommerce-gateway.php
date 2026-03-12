@@ -3,7 +3,7 @@
  * Plugin Name: ChargX Payment Gateway for WooCommerce
  * Description: Modern ChargX payment gateway for WooCommerce (Credit Cards + Apple/Google Pay, refunds, recurring).
  * Author: ChargX
- * Version: 0.20.6
+ * Version: 0.21.0
  * Requires at least: 5.8
  * Requires PHP: 7.4
  * WC requires at least: 4.0
@@ -67,6 +67,8 @@ function chargx_wc_init() {
     add_action( 'wp_footer', 'chargx_refresh_checkout_on_payment_change' );
 }
 add_action( 'plugins_loaded', 'chargx_wc_init', 20 );
+
+register_activation_hook(__FILE__, 'chargx_activate');
 
 /**
  * Register ChargX gateways with WooCommerce.
@@ -175,7 +177,7 @@ function chargx_wc_enqueue_assets() {
         'apple_publishable'  => $apple_gateway ? $apple_gateway->get_publishable_key() : '',
         'google_publishable' => $google_gateway ? $google_gateway->get_publishable_key() : '',
         'card_testmode'      => $card_gateway && 'yes' === $card_gateway->get_option( 'testmode', 'no' ) ? 'yes' : 'no',
-        'payment_redirection_flow' => $card_gateway && 'yes' === $card_gateway->get_option( 'payment_redirection_flow', 'no' ) ? 'yes' : 'no',
+        'payment_redirection_flow' => $card_gateway->payment_redirection_flow,
         'api_endpoint'       => $card_gateway ? $card_gateway->get_option( 'api_endpoint' ) : 'https://api.chargx.io',
         'apple_testmode'     => $apple_gateway && 'yes' === $apple_gateway->get_option( 'testmode', 'no' ) ? 'yes' : 'no',
         'google_testmode'    => $google_gateway && 'yes' === $google_gateway->get_option( 'testmode', 'no' ) ? 'yes' : 'no',
@@ -272,5 +274,26 @@ function chargx_refresh_checkout_on_payment_change() {
         });
     </script>
     <?php
+}
+
+function chargx_activate() {
+    wc_get_logger()->info('chargx_activate', ['source' => 'chargx-woocommerce']);
+
+    // enable card and bank gateways by default
+    $gateways = [
+        'chargx_bank',
+        'chargx_card',
+    ];
+
+    foreach ($gateways as $gateway) {
+
+        $option_key = "woocommerce_{$gateway}_settings";
+
+        if (!get_option($option_key)) {
+            add_option($option_key, [
+                'enabled' => 'yes'
+            ]);
+        }
+    }
 }
 
