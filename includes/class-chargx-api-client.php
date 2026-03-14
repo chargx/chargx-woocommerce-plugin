@@ -251,9 +251,10 @@ class ChargX_API_Client {
      * @param string $bank_token From exchange_public_token().
      * @param float  $amount     Order total.
      * @param string $order_id   WooCommerce order ID.
+     * @param string $link_token 
      * @return array|WP_Error
      */
-    public function transact_bank_to_bank( $bank_token, $amount, $order_id ) {
+    public function transact_bank_to_bank( $bank_token, $link_token, $amount, $order_id) {
         if ( empty( $bank_token ) ) {
             return new WP_Error( 'chargx_missing_bank_token', __( 'Missing bank token.', 'chargx-woocommerce' ) );
         }
@@ -261,6 +262,7 @@ class ChargX_API_Client {
             'bankToken' => (string) $bank_token,
             'amount'    => (float) $amount,
             'orderId'   => (string) $order_id,
+            'linkToken' => (string) $link_token,
         );
         return $this->post( 'v1/bank-to-bank/transact', $body );
     }

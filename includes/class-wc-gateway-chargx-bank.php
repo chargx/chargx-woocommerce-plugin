@@ -143,6 +143,7 @@ class WC_Gateway_ChargX_Bank extends WC_Gateway_ChargX_Base {
      */
     protected function handle_bank_public_token( $order ) {
         $public_token = sanitize_text_field( wp_unslash( $_POST['fingrid_public_token'] ) );
+        $link_token = sanitize_text_field( wp_unslash( $_POST['fingrid_link_token'] ) );
         $chargx_api   = $this->get_api_client();
 
         $exchange = $chargx_api->exchange_public_token( $public_token );
@@ -162,7 +163,7 @@ class WC_Gateway_ChargX_Bank extends WC_Gateway_ChargX_Base {
 
         $return_url = $this->get_return_url( $order );
         $amount     = $this->get_bank_transaction_amount( $order );
-        $transaction = $chargx_api->transact_bank_to_bank( $bank_token, $amount, (string) $order->get_id() );
+        $transaction = $chargx_api->transact_bank_to_bank( $bank_token, $link_token, $amount, (string) $order->get_id());
 
         if ( is_wp_error( $transaction ) ) {
             $this->log( 'ChargX transact_bank_to_bank failed: ' . $transaction->get_error_message(), 'error' );
@@ -244,14 +245,16 @@ class WC_Gateway_ChargX_Bank extends WC_Gateway_ChargX_Base {
             <form id="fingrid-token-form" class="fingrid-form" action="<?php echo esc_url( $form_action ); ?>" method="post" style="display:none;">
                 <?php wp_nonce_field( 'chargx_fingrid_connect', 'fingrid_nonce' ); ?>
                 <input type="hidden" name="fingrid_public_token" id="fingrid-public-token" value="" />
+                <input type="hidden" name="fingrid_link_token" id="fingrid-link-token" value="<?php echo $link_token; ?>" />
             </form>
 
             <script src="<?php echo esc_url( $sdk_url ); ?>"></script>
             <script>
                 (function() {
                     var linkToken = <?php echo wp_json_encode( $link_token ); ?>;
+                    //
                     var form = document.getElementById('fingrid-token-form');
-                    var input = document.getElementById('fingrid-public-token');
+                    var publicTokenInput = document.getElementById('fingrid-public-token');
                     var message = document.getElementById('fingrid-message');
                     var errEl = document.getElementById('fingrid-error');
 
@@ -280,7 +283,8 @@ class WC_Gateway_ChargX_Bank extends WC_Gateway_ChargX_Base {
 
                                 cabbage.closeGrid();
 
-                                input.value = publicToken;
+                                publicTokenInput.value = publicToken;
+
                                 message.textContent = '<?php echo esc_js( __( 'Bank connected. Completing payment…', 'chargx-woocommerce' ) ); ?>';
                                 form.submit();
                             }
