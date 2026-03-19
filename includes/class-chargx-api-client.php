@@ -313,59 +313,6 @@ class ChargX_API_Client {
     }
 
     /**
-     * Void transaction.
-     *
-     * POST /transaction/void
-     */
-    public function void( $order_id ) {
-        return $this->post( 'transaction/void', array( 'orderId' => (string) $order_id ) );
-    }
-
-    /**
-     * Create subscription for recurring payments.
-     *
-     * POST /subscription
-     */
-    public function create_subscription( $payload ) {
-        return $this->post( 'subscription', $payload );
-    }
-
-    /**
-     * Retrieve subscription.
-     *
-     * GET /subscription/<id>
-     */
-    public function get_subscription( $id ) {
-        $path = 'subscription/' . rawurlencode( $id );
-
-        return $this->get( $path );
-    }
-
-    /**
-     * Delete subscription.
-     *
-     * DELETE /subscription/<id>
-     */
-    public function delete_subscription( $id ) {
-        $url = trailingslashit( $this->endpoint ) . 'subscription/' . rawurlencode( $id );
-
-        $response = wp_remote_request(
-            $url,
-            array(
-                'method'  => 'DELETE',
-                'timeout' => 30,
-                'headers' => array(
-                    'x-publishable-api-key' => $this->publishable_key,
-                    'Content-Type'          => 'application/json',
-                    'Accept'                => 'application/json',
-                ),
-            )
-        );
-
-        return $this->handle_response( $response );
-    }
-
-    /**
      * Payout via Admin API.
      *
      * POST /admin/payout

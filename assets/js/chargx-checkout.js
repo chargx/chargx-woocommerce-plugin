@@ -441,7 +441,5 @@
 
   $(function () {
     ChargXCardHandler.init();
-    ChargXApplePayHandler.init();
-    ChargXGooglePayHandler.init();
   });
 })(jQuery);

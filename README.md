@@ -1,6 +1,6 @@
 # ChargX Payment Gateway plugin for WooCommerce
 
-ChargX payment gateway for WooCommerce (Credit Cards + Apple Pay + Google Pay, refunds, recurring).
+ChargX payment gateway for WooCommerce (Credit Cards + Pay By Bank).
 
 Documentation https://docs.chargx.io/woocommerce
 
@@ -18,7 +18,7 @@ Documentation https://docs.chargx.io/woocommerce
 3. Enable ChargX payments
 - Go to **WooCommerce → Settings → Payments**
 - Locate **ChargX - ...** in the payments list.
-- Toggle the switch to **Enabled** for required payment methods (e.g. Credit Card, Apple Pay, Google Pay)
+- Toggle the switch to **Enabled** for required payment methods (e.g. Credit Card, Pay By Bank)
 
 4. Configure API keys
 

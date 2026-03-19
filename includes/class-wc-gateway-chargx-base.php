@@ -81,8 +81,7 @@ abstract class WC_Gateway_ChargX_Base extends WC_Payment_Gateway {
     public function __construct() {
         $this->supports = array(
             'products',
-            'refunds',
-            'subscriptions',
+            'refunds'
         );
 
         $this->init_form_fields();
