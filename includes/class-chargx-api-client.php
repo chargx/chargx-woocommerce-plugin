@@ -345,14 +345,11 @@ class ChargX_API_Client {
      * @return array|WP_Error
      */
     public function create_webhook( $url, $name = 'WOO', $events = array( 'payment.succeeded' ), $enabled = true) {
-        $environment = $this->testmode ? 'test' : 'live';
-        
         $body = array(
             'url'         => $url,
             'name'        => $name,
             'events'      => $events,
-            'enabled'     => (bool) $enabled,
-            'environment' => (string) $environment,
+            'enabled'     => (bool) $enabled
         );
         return $this->admin_post( 'webhook', $body );
     }

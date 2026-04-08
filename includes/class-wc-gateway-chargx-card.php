@@ -39,7 +39,7 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
     }
 
     /**
-     * Register webhook with ChargX if it does not already exist (for the given environment)
+     * Register webhook with ChargX if it does not already exist
      */
     private function register_webhook( ) {
         $this->log( 'register_webhook ', 'info' );
@@ -57,16 +57,10 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
             ? $existing['webhook_endpoints']
             : array();
 
-        $environment = 'yes' === $this->testmode  ? 'test' : 'live';
-        $this->log( 'register_webhook testmode' . $this->testmode, 'info' );
-        $this->log( 'register_webhook environment' . $environment, 'info' );
-
-
         foreach ( $endpoints as $endpoint ) {
             $ep_url = isset( $endpoint['url'] ) ? $endpoint['url'] : '';
-            $ep_env = isset( $endpoint['environment'] ) ? $endpoint['environment'] : '';
-            if ( $ep_url === $webhook_url && $ep_env === $environment ) {
-                $this->log( 'register_webhook already exists: ' . $webhook_url . ' (env: ' . $environment . ')', 'info' );
+            if ( $ep_url === $webhook_url) {
+                $this->log( 'register_webhook already exists: ' . $webhook_url, 'info' );
                 return;
             }
         }
