@@ -8,6 +8,13 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
 
+    /**
+     * Prevents rendering the confirmation popup more than once per request.
+     *
+     * @var bool
+     */
+    private static $popup_rendered = false;
+
     public function __construct() {
         $this->id                 = 'chargx_card';
         $this->method_title       = __( 'ChargX – Credit Card', 'chargx-woocommerce' );
@@ -18,6 +25,8 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
         add_action('woocommerce_api_wc_gateway_chargx_card_success_url', [$this, 'handle_return']);
         add_action('woocommerce_api_wc_gateway_chargx_card_success_url_webhook', [$this, 'handle_webhook_success_payment']);
         add_action('woocommerce_api_chargx_order_status', [$this, 'ajax_order_status']);
+
+        add_action( 'woocommerce_before_thankyou', array( $this, 'show_order_received_popup' ), 10, 1 );
 
         add_action( 'woocommerce_update_options_payment_gateways_' . $this->id, [$this, 'process_admin_options'] );
     }
@@ -324,76 +333,317 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
             wp_die( 'Invalid order', 400 );
         }
 
-        $thankyou = $this->get_return_url( $order );
+        $thankyou = add_query_arg( 'chargx_confirm', '1', $this->get_return_url( $order ) );
 
         // Allow polling for this order for 5 minutes (only from this return flow).
         set_transient( 'chargx_return_poll_' . $order_id, 1, 5 * MINUTE_IN_SECONDS );
+        $order->update_meta_data( '_chargx_pending_confirm', 'yes' );
+        $order->save();
 
-        $this->render_finalizing_page( $order_id, $thankyou );
+        wp_safe_redirect( $thankyou );
         exit;
     }
 
     /**
-     * Renders the "Finalizing your order" intermediate page with loader and status polling.
+     * Shows the confirmation popup on the order received page after payment redirect.
      *
-     * @param int    $order_id   WooCommerce order ID.
-     * @param string $thankyou_url URL to redirect to when order is completed.
+     * @param int $order_id WooCommerce order ID.
      */
-    protected function render_finalizing_page( $order_id, $thankyou_url ) {
-        $this->log('render_finalizing_page. order_id: ' . $order_id, 'info');
+    public function show_order_received_popup( $order_id ) {
+        if ( self::$popup_rendered ) {
+            return;
+        }
 
-        $status_url = home_url( '/?wc-api=chargx_order_status&order_id=' . absint( $order_id ) );
+        $order = wc_get_order( $order_id );
+        if ( ! $order || $order->get_payment_method() !== $this->id ) {
+            return;
+        }
+
+        $should_show = 'yes' === $order->get_meta( '_chargx_pending_confirm' )
+            || ( isset( $_GET['chargx_confirm'] ) && '1' === $_GET['chargx_confirm'] );
+
+        if ( ! $should_show ) {
+            return;
+        }
+
+        self::$popup_rendered = true;
+        $this->log( 'show_order_received_popup for order ' . $order_id, 'info' );
+        $this->render_confirmation_popup( $order_id );
+    }
+
+    /**
+     * Renders the confirmation popup with optional auto-confirm countdown, then polls order status.
+     *
+     * @param int $order_id WooCommerce order ID.
+     */
+    protected function render_confirmation_popup( $order_id ) {
+        $this->log( 'render_confirmation_popup. order_id: ' . $order_id, 'info' );
+
+        $status_url = add_query_arg(
+            array(
+                'wc-api'     => 'chargx_order_status',
+                'order_id'   => absint( $order_id ),
+                'from_popup' => '1',
+            ),
+            home_url( '/' )
+        );
         ?>
-        <!DOCTYPE html>
-        <html <?php language_attributes(); ?>>
-        <head>
-            <meta charset="<?php bloginfo( 'charset' ); ?>">
-            <meta name="viewport" content="width=device-width, initial-scale=1">
-            <title><?php esc_html_e( 'Finalizing your order', 'chargx-woocommerce' ); ?></title>
-            <style>
-                body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, sans-serif; margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #f5f5f5; }
-                .chargx-finalizing { text-align: center; padding: 2rem; }
-                .chargx-finalizing p { color: #333; font-size: 1.125rem; margin-bottom: 1.5rem; }
-                .chargx-loader { width: 40px; height: 40px; border: 3px solid #e0e0e0; border-top-color: #333; border-radius: 50%; animation: chargx-spin 0.8s linear infinite; margin: 0 auto 1.5rem; }
-                @keyframes chargx-spin { to { transform: rotate(360deg); } }
-            </style>
-        </head>
-        <body>
-            <div class="chargx-finalizing">
-                <div class="chargx-loader" aria-hidden="true"></div>
-                <p><?php esc_html_e( 'Finalizing your order and updating inventory...', 'chargx-woocommerce' ); ?></p>
-            </div>
-            <script>
-                (function() {
-                    var statusUrl = <?php echo wp_json_encode( $status_url ); ?>;
-                    var thankYouUrl = <?php echo wp_json_encode( $thankyou_url ); ?>;
-                    var interval = 2000;
+        <div id="chargx-confirm-overlay" class="chargx-overlay" role="dialog" aria-modal="true" aria-labelledby="chargx-confirm-title">
+            <div class="chargx-overlay-backdrop" aria-hidden="true"></div>
+            <div class="chargx-page">
+                <div class="chargx-card chargx-confirm" id="chargx-confirm">
+                    <h2 class="chargx-title" id="chargx-confirm-title"><?php esc_html_e( 'Confirm transaction', 'chargx-woocommerce' ); ?></h2>
+                    <p class="chargx-subtitle"><?php esc_html_e( 'Confirm the transaction by clicking the button below', 'chargx-woocommerce' ); ?></p>
 
-                    function checkStatus() {
-                        fetch(statusUrl)
-                            .then(function(r) { return r.json(); })
-                            .then(function(data) {
-                                console.log('checkStatus. data: ' + JSON.stringify(data));
-                                if (data.completed) {
-                                    window.location.href = thankYouUrl;
-                                }
-                            })
-                            .catch(function(err) {
-                                console.error('checkStatus. error', err);
-                            });
+                    <div class="chargx-countdown-block">
+                        <div class="chargx-countdown-bar" aria-hidden="true">
+                            <div class="chargx-countdown-bar-fill" id="chargx-countdown-bar"></div>
+                        </div>
+                        <p class="chargx-countdown-label" id="chargx-countdown" aria-live="polite"></p>
+                    </div>
+
+                    <button type="button" class="chargx-confirm-btn" id="chargx-confirm-btn">
+                        <?php esc_html_e( 'Confirm', 'chargx-woocommerce' ); ?>
+                    </button>
+                </div>
+
+                <div class="chargx-card chargx-finalizing" id="chargx-finalizing">
+                    <div class="chargx-loader" aria-hidden="true"></div>
+                    <p class="chargx-finalizing-text"><?php esc_html_e( 'Finalizing your order and updating inventory...', 'chargx-woocommerce' ); ?></p>
+                </div>
+            </div>
+        </div>
+        <style>
+            .chargx-overlay {
+                --chargx-bg: #f3f3f3;
+                --chargx-surface: #ffffff;
+                --chargx-border: #e2e2e2;
+                --chargx-text: #1a1a1a;
+                --chargx-text-muted: #6b6b6b;
+                --chargx-btn: #2c2c2c;
+                --chargx-btn-hover: #1a1a1a;
+                --chargx-track: #e8e8e8;
+                --chargx-progress: #8a8a8a;
+
+                position: fixed;
+                inset: 0;
+                z-index: 999999;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 1rem;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen-Sans, Ubuntu, Cantarell, sans-serif;
+                color: var(--chargx-text);
+                line-height: 1.5;
+            }
+
+            .chargx-overlay-backdrop {
+                position: absolute;
+                inset: 0;
+                background: rgba(0, 0, 0, 0.45);
+            }
+
+            .chargx-overlay .chargx-page {
+                position: relative;
+                z-index: 1;
+                width: min(100%, 480px);
+            }
+
+            .chargx-overlay .chargx-card {
+                background: var(--chargx-surface);
+                border: 1px solid var(--chargx-border);
+                border-radius: 4px;
+                padding: 2.5rem 2rem;
+                text-align: center;
+            }
+
+            .chargx-overlay .chargx-title {
+                margin: 0 0 0.75rem;
+                font-size: 1.375rem;
+                font-weight: 600;
+                color: var(--chargx-text);
+            }
+
+            .chargx-overlay .chargx-subtitle {
+                margin: 0 0 2rem;
+                color: var(--chargx-text-muted);
+                font-size: 0.9375rem;
+                line-height: 1.6;
+            }
+
+            .chargx-overlay .chargx-countdown-block {
+                margin-bottom: 2rem;
+            }
+
+            .chargx-overlay .chargx-countdown-bar {
+                height: 4px;
+                background: var(--chargx-track);
+                border-radius: 2px;
+                overflow: hidden;
+                margin-bottom: 0.75rem;
+            }
+
+            .chargx-overlay .chargx-countdown-bar-fill {
+                height: 100%;
+                width: 100%;
+                background: var(--chargx-progress);
+                border-radius: 2px;
+                transition: width 1s linear;
+            }
+
+            .chargx-overlay .chargx-countdown-label {
+                margin: 0;
+                color: var(--chargx-text-muted);
+                font-size: 0.875rem;
+            }
+
+            .chargx-overlay .chargx-confirm-btn {
+                display: inline-block;
+                width: 100%;
+                max-width: 280px;
+                padding: 0.875rem 1.5rem;
+                font-family: inherit;
+                font-size: 0.9375rem;
+                font-weight: 500;
+                color: #ffffff;
+                background: var(--chargx-btn);
+                border: 1px solid var(--chargx-btn);
+                border-radius: 3px;
+                cursor: pointer;
+                transition: background 0.15s ease, border-color 0.15s ease;
+            }
+
+            .chargx-overlay .chargx-confirm-btn:hover {
+                background: var(--chargx-btn-hover);
+                border-color: var(--chargx-btn-hover);
+            }
+
+            .chargx-overlay .chargx-confirm-btn:focus-visible {
+                outline: 2px solid #888888;
+                outline-offset: 2px;
+            }
+
+            .chargx-overlay .chargx-confirm-btn:disabled {
+                opacity: 0.5;
+                cursor: not-allowed;
+            }
+
+            .chargx-overlay .chargx-finalizing { display: none; }
+            .chargx-overlay .chargx-finalizing.is-active { display: block; }
+            .chargx-overlay .chargx-confirm { display: block; }
+            .chargx-overlay .chargx-confirm.is-hidden { display: none; }
+
+            .chargx-overlay .chargx-loader {
+                width: 36px;
+                height: 36px;
+                border: 2px solid var(--chargx-track);
+                border-top-color: var(--chargx-progress);
+                border-radius: 50%;
+                animation: chargx-spin 0.8s linear infinite;
+                margin: 0 auto 1.25rem;
+            }
+
+            .chargx-overlay .chargx-finalizing-text {
+                margin: 0;
+                color: var(--chargx-text-muted);
+                font-size: 0.9375rem;
+                line-height: 1.6;
+            }
+
+            @keyframes chargx-spin { to { transform: rotate(360deg); } }
+
+            body.chargx-confirm-open {
+                overflow: hidden;
+            }
+
+            @media (prefers-reduced-motion: reduce) {
+                .chargx-overlay .chargx-loader { animation: none; }
+                .chargx-overlay .chargx-countdown-bar-fill { transition: none; }
+                .chargx-overlay .chargx-confirm-btn { transition: none; }
+            }
+        </style>
+        <script>
+            (function() {
+                var statusUrl = <?php echo wp_json_encode( $status_url ); ?>;
+                var pollInterval = 2000;
+                var countdownTotal = 5;
+                var countdownSeconds = countdownTotal;
+                var confirmed = false;
+                var countdownTimer = null;
+
+                var overlay = document.getElementById('chargx-confirm-overlay');
+                var confirmSection = document.getElementById('chargx-confirm');
+                var finalizingSection = document.getElementById('chargx-finalizing');
+                var confirmBtn = document.getElementById('chargx-confirm-btn');
+                var countdownEl = document.getElementById('chargx-countdown');
+                var countdownBar = document.getElementById('chargx-countdown-bar');
+
+                document.body.classList.add('chargx-confirm-open');
+
+                function updateCountdown(seconds) {
+                    countdownEl.textContent = '<?php echo esc_js( __( 'Automatic confirmation in', 'chargx-woocommerce' ) ); ?> ' + seconds;
+                    countdownBar.style.width = ((seconds / countdownTotal) * 100) + '%';
+                }
+
+                function refreshThankYouPage() {
+                    var url = new URL(window.location.href);
+                    url.searchParams.delete('chargx_confirm');
+                    window.location.replace(url.toString());
+                }
+
+                function checkStatus() {
+                    fetch(statusUrl)
+                        .then(function(r) { return r.json(); })
+                        .then(function(data) {
+                            if (data.completed) {
+                                refreshThankYouPage();
+                            }
+                        })
+                        .catch(function(err) {
+                            console.error('checkStatus. error', err);
+                        });
+                }
+
+                function startPolling() {
+                    checkStatus();
+                    setInterval(checkStatus, pollInterval);
+                }
+
+                function confirmTransaction() {
+                    if (confirmed) {
+                        return;
+                    }
+                    confirmed = true;
+
+                    if (countdownTimer) {
+                        clearInterval(countdownTimer);
+                        countdownTimer = null;
                     }
 
-                    checkStatus();
-                    setInterval(checkStatus, interval);
-                })();
-            </script>
-        </body>
-        </html>
+                    confirmBtn.disabled = true;
+                    confirmSection.classList.add('is-hidden');
+                    finalizingSection.classList.add('is-active');
+                    startPolling();
+                }
+
+                updateCountdown(countdownSeconds);
+                countdownTimer = setInterval(function() {
+                    countdownSeconds -= 1;
+                    if (countdownSeconds <= 0) {
+                        confirmTransaction();
+                        return;
+                    }
+                    updateCountdown(countdownSeconds);
+                }, 1000);
+
+                confirmBtn.addEventListener('click', confirmTransaction);
+            })();
+        </script>
         <?php
     }
 
     /**
-     * AJAX handler: returns order status for the finalizing-page poll. Order is "completed" when status is processing or completed.
+     * AJAX handler: returns order status for the confirmation popup poll.
      */
     public function ajax_order_status() {
         $order_id = absint( $_GET['order_id'] ?? 0 );
@@ -410,6 +660,12 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
         $status = $order->get_status();
         $this->log('ajax_order_status. status: ' . $status, 'info');
         $completed = in_array( $status, array( 'processing', 'completed' ), true );
+        $from_popup = isset( $_GET['from_popup'] ) && '1' === $_GET['from_popup'];
+        if ( $completed && $from_popup ) {
+            delete_transient( 'chargx_return_poll_' . $order_id );
+            $order->delete_meta_data( '_chargx_pending_confirm' );
+            $order->save();
+        }
         wp_send_json( array( 'completed' => $completed, 'status' => $status ) );
     }
 
