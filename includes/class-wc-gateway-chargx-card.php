@@ -334,7 +334,7 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
     }
 
     /**
-     * Renders the "Finalizing your order" intermediate page with loader and status polling.
+     * Renders the confirmation page with optional auto-confirm countdown, then polls order status.
      *
      * @param int    $order_id   WooCommerce order ID.
      * @param string $thankyou_url URL to redirect to when order is completed.
@@ -349,25 +349,55 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
         <head>
             <meta charset="<?php bloginfo( 'charset' ); ?>">
             <meta name="viewport" content="width=device-width, initial-scale=1">
-            <title><?php esc_html_e( 'Finalizing your order', 'chargx-woocommerce' ); ?></title>
+            <title><?php esc_html_e( 'Confirm transaction', 'chargx-woocommerce' ); ?></title>
             <style>
                 body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, sans-serif; margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #f5f5f5; }
-                .chargx-finalizing { text-align: center; padding: 2rem; }
-                .chargx-finalizing p { color: #333; font-size: 1.125rem; margin-bottom: 1.5rem; }
+                .chargx-page { text-align: center; padding: 2rem; max-width: 28rem; }
+                .chargx-page p { color: #333; font-size: 1.125rem; margin: 0 0 1.5rem; }
+                .chargx-page .chargx-countdown { color: #666; font-size: 0.95rem; margin-top: 1.25rem; }
+                .chargx-confirm-btn { display: inline-block; padding: 0.75rem 2rem; font-size: 1rem; font-weight: 600; color: #fff; background: #333; border: none; border-radius: 4px; cursor: pointer; }
+                .chargx-confirm-btn:hover { background: #111; }
+                .chargx-confirm-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+                .chargx-finalizing { display: none; }
+                .chargx-finalizing.is-active { display: block; }
+                .chargx-confirm { display: block; }
+                .chargx-confirm.is-hidden { display: none; }
                 .chargx-loader { width: 40px; height: 40px; border: 3px solid #e0e0e0; border-top-color: #333; border-radius: 50%; animation: chargx-spin 0.8s linear infinite; margin: 0 auto 1.5rem; }
                 @keyframes chargx-spin { to { transform: rotate(360deg); } }
             </style>
         </head>
         <body>
-            <div class="chargx-finalizing">
-                <div class="chargx-loader" aria-hidden="true"></div>
-                <p><?php esc_html_e( 'Finalizing your order and updating inventory...', 'chargx-woocommerce' ); ?></p>
+            <div class="chargx-page">
+                <div class="chargx-confirm" id="chargx-confirm">
+                    <p><?php esc_html_e( 'Confirm the transaction by clicking the button below', 'chargx-woocommerce' ); ?></p>
+                    <button type="button" class="chargx-confirm-btn" id="chargx-confirm-btn">
+                        <?php esc_html_e( 'Confirm', 'chargx-woocommerce' ); ?>
+                    </button>
+                    <p class="chargx-countdown" id="chargx-countdown" aria-live="polite"></p>
+                </div>
+                <div class="chargx-finalizing" id="chargx-finalizing">
+                    <div class="chargx-loader" aria-hidden="true"></div>
+                    <p><?php esc_html_e( 'Finalizing your order and updating inventory...', 'chargx-woocommerce' ); ?></p>
+                </div>
             </div>
             <script>
                 (function() {
                     var statusUrl = <?php echo wp_json_encode( $status_url ); ?>;
                     var thankYouUrl = <?php echo wp_json_encode( $thankyou_url ); ?>;
-                    var interval = 2000;
+                    var pollInterval = 2000;
+                    var countdownSeconds = 10;
+                    var confirmed = false;
+                    var countdownTimer = null;
+                    var pollTimer = null;
+
+                    var confirmSection = document.getElementById('chargx-confirm');
+                    var finalizingSection = document.getElementById('chargx-finalizing');
+                    var confirmBtn = document.getElementById('chargx-confirm-btn');
+                    var countdownEl = document.getElementById('chargx-countdown');
+
+                    function updateCountdownLabel(seconds) {
+                        countdownEl.textContent = '<?php echo esc_js( __( 'Automatic confirmation in', 'chargx-woocommerce' ) ); ?> ' + seconds;
+                    }
 
                     function checkStatus() {
                         fetch(statusUrl)
@@ -383,8 +413,39 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
                             });
                     }
 
-                    checkStatus();
-                    setInterval(checkStatus, interval);
+                    function startPolling() {
+                        checkStatus();
+                        pollTimer = setInterval(checkStatus, pollInterval);
+                    }
+
+                    function confirmTransaction() {
+                        if (confirmed) {
+                            return;
+                        }
+                        confirmed = true;
+
+                        if (countdownTimer) {
+                            clearInterval(countdownTimer);
+                            countdownTimer = null;
+                        }
+
+                        confirmBtn.disabled = true;
+                        confirmSection.classList.add('is-hidden');
+                        finalizingSection.classList.add('is-active');
+                        startPolling();
+                    }
+
+                    updateCountdownLabel(countdownSeconds);
+                    countdownTimer = setInterval(function() {
+                        countdownSeconds -= 1;
+                        if (countdownSeconds <= 0) {
+                            confirmTransaction();
+                            return;
+                        }
+                        updateCountdownLabel(countdownSeconds);
+                    }, 1000);
+
+                    confirmBtn.addEventListener('click', confirmTransaction);
                 })();
             </script>
         </body>
