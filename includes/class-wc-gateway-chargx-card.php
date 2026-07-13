@@ -351,41 +351,177 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
             <meta name="viewport" content="width=device-width, initial-scale=1">
             <title><?php esc_html_e( 'Confirm transaction', 'chargx-woocommerce' ); ?></title>
             <style>
-                body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, sans-serif; margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #f5f5f5; }
-                .chargx-page { text-align: center; padding: 2rem; max-width: 28rem; }
-                .chargx-page p { color: #333; font-size: 1.125rem; margin: 0 0 1.5rem; }
-                .chargx-page .chargx-countdown { color: #666; font-size: 0.95rem; margin-top: 1.25rem; }
-                .chargx-confirm-btn { display: inline-block; padding: 0.75rem 2rem; font-size: 1rem; font-weight: 600; color: #fff; background: #333; border: none; border-radius: 4px; cursor: pointer; }
-                .chargx-confirm-btn:hover { background: #111; }
-                .chargx-confirm-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+                :root {
+                    --chargx-bg: #f3f3f3;
+                    --chargx-surface: #ffffff;
+                    --chargx-border: #e2e2e2;
+                    --chargx-text: #1a1a1a;
+                    --chargx-text-muted: #6b6b6b;
+                    --chargx-btn: #2c2c2c;
+                    --chargx-btn-hover: #1a1a1a;
+                    --chargx-track: #e8e8e8;
+                    --chargx-progress: #8a8a8a;
+                }
+
+                *, *::before, *::after { box-sizing: border-box; }
+
+                body {
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen-Sans, Ubuntu, Cantarell, sans-serif;
+                    margin: 0;
+                    min-height: 100vh;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    background: var(--chargx-bg);
+                    color: var(--chargx-text);
+                    line-height: 1.5;
+                }
+
+                .chargx-page {
+                    width: min(100% - 2rem, 480px);
+                    padding: 1rem;
+                }
+
+                .chargx-card {
+                    background: var(--chargx-surface);
+                    border: 1px solid var(--chargx-border);
+                    border-radius: 4px;
+                    padding: 2.5rem 2rem;
+                    text-align: center;
+                }
+
+                .chargx-title {
+                    margin: 0 0 0.75rem;
+                    font-size: 1.375rem;
+                    font-weight: 600;
+                    color: var(--chargx-text);
+                }
+
+                .chargx-subtitle {
+                    margin: 0 0 2rem;
+                    color: var(--chargx-text-muted);
+                    font-size: 0.9375rem;
+                    line-height: 1.6;
+                }
+
+                .chargx-countdown-block {
+                    margin-bottom: 2rem;
+                }
+
+                .chargx-countdown-bar {
+                    height: 4px;
+                    background: var(--chargx-track);
+                    border-radius: 2px;
+                    overflow: hidden;
+                    margin-bottom: 0.75rem;
+                }
+
+                .chargx-countdown-bar-fill {
+                    height: 100%;
+                    width: 100%;
+                    background: var(--chargx-progress);
+                    border-radius: 2px;
+                    transition: width 1s linear;
+                }
+
+                .chargx-countdown-label {
+                    margin: 0;
+                    color: var(--chargx-text-muted);
+                    font-size: 0.875rem;
+                }
+
+                .chargx-confirm-btn {
+                    display: inline-block;
+                    width: 100%;
+                    max-width: 280px;
+                    padding: 0.875rem 1.5rem;
+                    font-family: inherit;
+                    font-size: 0.9375rem;
+                    font-weight: 500;
+                    color: #ffffff;
+                    background: var(--chargx-btn);
+                    border: 1px solid var(--chargx-btn);
+                    border-radius: 3px;
+                    cursor: pointer;
+                    transition: background 0.15s ease, border-color 0.15s ease;
+                }
+
+                .chargx-confirm-btn:hover {
+                    background: var(--chargx-btn-hover);
+                    border-color: var(--chargx-btn-hover);
+                }
+
+                .chargx-confirm-btn:focus-visible {
+                    outline: 2px solid #888888;
+                    outline-offset: 2px;
+                }
+
+                .chargx-confirm-btn:disabled {
+                    opacity: 0.5;
+                    cursor: not-allowed;
+                }
+
                 .chargx-finalizing { display: none; }
                 .chargx-finalizing.is-active { display: block; }
                 .chargx-confirm { display: block; }
                 .chargx-confirm.is-hidden { display: none; }
-                .chargx-loader { width: 40px; height: 40px; border: 3px solid #e0e0e0; border-top-color: #333; border-radius: 50%; animation: chargx-spin 0.8s linear infinite; margin: 0 auto 1.5rem; }
+
+                .chargx-loader {
+                    width: 36px;
+                    height: 36px;
+                    border: 2px solid var(--chargx-track);
+                    border-top-color: var(--chargx-progress);
+                    border-radius: 50%;
+                    animation: chargx-spin 0.8s linear infinite;
+                    margin: 0 auto 1.25rem;
+                }
+
+                .chargx-finalizing-text {
+                    margin: 0;
+                    color: var(--chargx-text-muted);
+                    font-size: 0.9375rem;
+                    line-height: 1.6;
+                }
+
                 @keyframes chargx-spin { to { transform: rotate(360deg); } }
+
+                @media (prefers-reduced-motion: reduce) {
+                    .chargx-loader { animation: none; }
+                    .chargx-countdown-bar-fill { transition: none; }
+                    .chargx-confirm-btn { transition: none; }
+                }
             </style>
         </head>
         <body>
-            <div class="chargx-page">
-                <div class="chargx-confirm" id="chargx-confirm">
-                    <p><?php esc_html_e( 'Confirm the transaction by clicking the button below', 'chargx-woocommerce' ); ?></p>
+            <main class="chargx-page">
+                <div class="chargx-card chargx-confirm" id="chargx-confirm">
+                    <h1 class="chargx-title"><?php esc_html_e( 'Confirm transaction', 'chargx-woocommerce' ); ?></h1>
+                    <p class="chargx-subtitle"><?php esc_html_e( 'Confirm the transaction by clicking the button below', 'chargx-woocommerce' ); ?></p>
+
+                    <div class="chargx-countdown-block">
+                        <div class="chargx-countdown-bar" aria-hidden="true">
+                            <div class="chargx-countdown-bar-fill" id="chargx-countdown-bar"></div>
+                        </div>
+                        <p class="chargx-countdown-label" id="chargx-countdown" aria-live="polite"></p>
+                    </div>
+
                     <button type="button" class="chargx-confirm-btn" id="chargx-confirm-btn">
                         <?php esc_html_e( 'Confirm', 'chargx-woocommerce' ); ?>
                     </button>
-                    <p class="chargx-countdown" id="chargx-countdown" aria-live="polite"></p>
                 </div>
-                <div class="chargx-finalizing" id="chargx-finalizing">
+
+                <div class="chargx-card chargx-finalizing" id="chargx-finalizing">
                     <div class="chargx-loader" aria-hidden="true"></div>
-                    <p><?php esc_html_e( 'Finalizing your order and updating inventory...', 'chargx-woocommerce' ); ?></p>
+                    <p class="chargx-finalizing-text"><?php esc_html_e( 'Finalizing your order and updating inventory...', 'chargx-woocommerce' ); ?></p>
                 </div>
-            </div>
+            </main>
             <script>
                 (function() {
                     var statusUrl = <?php echo wp_json_encode( $status_url ); ?>;
                     var thankYouUrl = <?php echo wp_json_encode( $thankyou_url ); ?>;
                     var pollInterval = 2000;
-                    var countdownSeconds = 10;
+                    var countdownTotal = 10;
+                    var countdownSeconds = countdownTotal;
                     var confirmed = false;
                     var countdownTimer = null;
                     var pollTimer = null;
@@ -394,9 +530,11 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
                     var finalizingSection = document.getElementById('chargx-finalizing');
                     var confirmBtn = document.getElementById('chargx-confirm-btn');
                     var countdownEl = document.getElementById('chargx-countdown');
+                    var countdownBar = document.getElementById('chargx-countdown-bar');
 
-                    function updateCountdownLabel(seconds) {
+                    function updateCountdown(seconds) {
                         countdownEl.textContent = '<?php echo esc_js( __( 'Automatic confirmation in', 'chargx-woocommerce' ) ); ?> ' + seconds;
+                        countdownBar.style.width = ((seconds / countdownTotal) * 100) + '%';
                     }
 
                     function checkStatus() {
@@ -435,14 +573,14 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
                         startPolling();
                     }
 
-                    updateCountdownLabel(countdownSeconds);
+                    updateCountdown(countdownSeconds);
                     countdownTimer = setInterval(function() {
                         countdownSeconds -= 1;
                         if (countdownSeconds <= 0) {
                             confirmTransaction();
                             return;
                         }
-                        updateCountdownLabel(countdownSeconds);
+                        updateCountdown(countdownSeconds);
                     }, 1000);
 
                     confirmBtn.addEventListener('click', confirmTransaction);
