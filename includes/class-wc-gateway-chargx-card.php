@@ -27,8 +27,6 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
         add_action('woocommerce_api_chargx_order_status', [$this, 'ajax_order_status']);
 
         add_action( 'woocommerce_before_thankyou', array( $this, 'show_order_received_popup' ), 10, 1 );
-        add_action( 'woocommerce_thankyou_' . $this->id, array( $this, 'show_order_received_popup' ), 10, 1 );
-        add_action( 'wp_footer', array( $this, 'maybe_show_order_received_popup' ), 20 );
 
         add_action( 'woocommerce_update_options_payment_gateways_' . $this->id, [$this, 'process_admin_options'] );
     }
@@ -347,30 +345,6 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
     }
 
     /**
-     * Fallback hook for themes/pages where woocommerce_before_thankyou does not run.
-     */
-    public function maybe_show_order_received_popup() {
-        $order_id = $this->get_order_received_id();
-        if ( ! $order_id ) {
-            return;
-        }
-
-        $this->show_order_received_popup( $order_id );
-    }
-
-    /**
-     * @return int
-     */
-    protected function get_order_received_id() {
-        $order_id = absint( get_query_var( 'order-received' ) );
-        if ( ! $order_id && isset( $_GET['order-received'] ) ) {
-            $order_id = absint( wp_unslash( $_GET['order-received'] ) );
-        }
-
-        return $order_id;
-    }
-
-    /**
      * Shows the confirmation popup on the order received page after payment redirect.
      *
      * @param int $order_id WooCommerce order ID.
@@ -393,6 +367,7 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
         }
 
         self::$popup_rendered = true;
+        $this->log( 'show_order_received_popup for order ' . $order_id, 'info' );
         $this->render_confirmation_popup( $order_id );
     }
 
@@ -591,7 +566,7 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
             (function() {
                 var statusUrl = <?php echo wp_json_encode( $status_url ); ?>;
                 var pollInterval = 2000;
-                var countdownTotal = 10;
+                var countdownTotal = 5;
                 var countdownSeconds = countdownTotal;
                 var confirmed = false;
                 var countdownTimer = null;
