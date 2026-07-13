@@ -342,67 +342,8 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
         $order->update_meta_data( '_chargx_pending_confirm', 'yes' );
         $order->save();
 
-        $this->render_finalizing_page( $order_id, $thankyou );
+        wp_safe_redirect( $thankyou );
         exit;
-    }
-
-    /**
-     * Renders the "Finalizing your order" intermediate page with loader and status polling.
-     *
-     * @param int    $order_id     WooCommerce order ID.
-     * @param string $thankyou_url URL to redirect to when order is completed.
-     */
-    protected function render_finalizing_page( $order_id, $thankyou_url ) {
-        $this->log('render_finalizing_page. order_id: ' . $order_id, 'info');
-
-        $status_url = home_url( '/?wc-api=chargx_order_status&order_id=' . absint( $order_id ) );
-        ?>
-        <!DOCTYPE html>
-        <html <?php language_attributes(); ?>>
-        <head>
-            <meta charset="<?php bloginfo( 'charset' ); ?>">
-            <meta name="viewport" content="width=device-width, initial-scale=1">
-            <title><?php esc_html_e( 'Finalizing your order', 'chargx-woocommerce' ); ?></title>
-            <style>
-                body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, sans-serif; margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #f5f5f5; }
-                .chargx-finalizing { text-align: center; padding: 2rem; }
-                .chargx-finalizing p { color: #333; font-size: 1.125rem; margin-bottom: 1.5rem; }
-                .chargx-loader { width: 40px; height: 40px; border: 3px solid #e0e0e0; border-top-color: #333; border-radius: 50%; animation: chargx-spin 0.8s linear infinite; margin: 0 auto 1.5rem; }
-                @keyframes chargx-spin { to { transform: rotate(360deg); } }
-            </style>
-        </head>
-        <body>
-            <div class="chargx-finalizing">
-                <div class="chargx-loader" aria-hidden="true"></div>
-                <p><?php esc_html_e( 'Finalizing your order and updating inventory...', 'chargx-woocommerce' ); ?></p>
-            </div>
-            <script>
-                (function() {
-                    var statusUrl = <?php echo wp_json_encode( $status_url ); ?>;
-                    var thankYouUrl = <?php echo wp_json_encode( $thankyou_url ); ?>;
-                    var interval = 2000;
-
-                    function checkStatus() {
-                        fetch(statusUrl)
-                            .then(function(r) { return r.json(); })
-                            .then(function(data) {
-                                console.log('checkStatus. data: ' + JSON.stringify(data));
-                                if (data.completed) {
-                                    window.location.href = thankYouUrl;
-                                }
-                            })
-                            .catch(function(err) {
-                                console.error('checkStatus. error', err);
-                            });
-                    }
-
-                    checkStatus();
-                    setInterval(checkStatus, interval);
-                })();
-            </script>
-        </body>
-        </html>
-        <?php
     }
 
     /**
