@@ -34,6 +34,10 @@ You'll need to provide credentials from your ChargX Dashboard:
 | **Test Secret API Key (Admin API)** | Used for server-side API calls in Test mode|
 | **Sandbox / Test Mode** | Sandbox or Production mode |
 
+## Updating to 0.26.0+
+
+Open **WooCommerce → Settings → Payments → ChargX – Credit Card** and click **Save** once (or wait for the next storefront request). The plugin stores the ChargX webhook signing secret so only signed `payment.succeeded` events mark an order as paid. The customer return URL only opens the thank-you page.
+
 ## Local development
 
 1. run WooCommerce instance locally

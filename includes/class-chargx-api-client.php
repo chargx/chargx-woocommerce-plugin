@@ -85,9 +85,7 @@ class ChargX_API_Client {
     protected function post( $path, $body = array() ) {
         $url = trailingslashit( $this->endpoint ) . ltrim( $path, '/' );
 
-
-        ChargX_Logger::log( "API post: $url, body: " . wp_json_encode( $body ), 'info' );
-
+        ChargX_Logger::log( 'API post: ' . $url . ', body: ' . ChargX_Logger::encode( $body ), 'info' );
 
         $response = wp_remote_post(
             $url,
@@ -174,9 +172,10 @@ class ChargX_API_Client {
 
         if ( $code < 200 || $code >= 300 ) {
             $message = isset( $data['message'] ) ? $data['message'] : 'Unknown ChargX API error';
-            ChargX_Logger::log( "API error ($code): $message | response: $body", 'error' );
+            $safe    = is_array( $data ) ? ChargX_Logger::encode( $data ) : ChargX_Logger::redact_string( (string) $body );
+            ChargX_Logger::log( "API error ($code): $message | response: $safe", 'error' );
 
-            return new WP_Error( 'chargx_api_error', $message, array( 'status' => $code, 'body' => $body ) );
+            return new WP_Error( 'chargx_api_error', $message, array( 'status' => $code ) );
         }
 
         return is_array( $data ) ? $data : array();
@@ -355,9 +354,42 @@ class ChargX_API_Client {
     }
 
     /**
+     * Rotate webhook signing secret (Admin API).
+     *
+     * POST /admin/webhook/:id/rotate-secret
+     *
+     * @param string $id Webhook endpoint id.
+     * @return array|WP_Error Response with secret (shown once).
+     */
+    public function rotate_webhook_secret( $id ) {
+        $id = rawurlencode( (string) $id );
+        return $this->admin_post( 'webhook/' . $id . '/rotate-secret', array() );
+    }
+
+    /**
      * Get publishable key.
      */
     public function get_publishable_key() {
         return $this->publishable_key;
+    }
+
+    public function set_testmode( $testmode ) {
+        $this->testmode = (bool) $testmode;
+    }
+
+    public function set_publishable_key( $publishable_key ) {
+        $this->publishable_key = trim( (string) $publishable_key );
+    }
+
+    public function set_secret_key( $secret_key ) {
+        $this->secret_key = trim( (string) $secret_key );
+    }
+
+    public function set_endpoint( $endpoint ) {
+        $this->endpoint = untrailingslashit( (string) $endpoint );
+    }
+
+    public function set_admin_api_endpoint( $admin_endpoint ) {
+        $this->admin_endpoint = untrailingslashit( (string) $admin_endpoint );
     }
 }
