@@ -185,24 +185,21 @@ abstract class WC_Gateway_ChargX_Base extends WC_Payment_Gateway {
      * @return ChargX_API_Client
      */
     public function get_api_client() {
+        $use_test = ( 'yes' === $this->testmode );
+        $pub_key  = $use_test ? $this->test_publishable_key : $this->publishable_key;
+        $sec_key  = $use_test ? $this->test_secret_key : $this->secret_key;
+        $endpoint = untrailingslashit( $this->api_endpoint );
+
         if ( $this->api_client instanceof ChargX_API_Client ) {
-
-            // reassign if changed
-            $this->api_client->set_testmode( 'yes' === $this->testmode );
-            $this->api_client->set_publishable_key( $use_test ? $this->test_publishable_key : $this->publishable_key );
-            $this->api_client->set_secret_key( $use_test ? $this->test_secret_key : $this->secret_key );
-            $this->api_client->set_endpoint( untrailingslashit($this->api_endpoint));
-            $this->api_client->set_admin_api_endpoint( trailingslashit(untrailingslashit($this->api_endpoint)) . 'admin');
-
+            $this->api_client->set_testmode( $use_test );
+            $this->api_client->set_publishable_key( $pub_key );
+            $this->api_client->set_secret_key( $sec_key );
+            $this->api_client->set_endpoint( $endpoint );
+            $this->api_client->set_admin_api_endpoint( trailingslashit( $endpoint ) . 'admin' );
             return $this->api_client;
         }
 
-        $use_test = ( 'yes' === $this->testmode );
-
-        $pub_key = $use_test ? $this->test_publishable_key : $this->publishable_key;
-        $sec_key = $use_test ? $this->test_secret_key : $this->secret_key;
-
-        $this->api_client = new ChargX_API_Client($this->api_endpoint, $pub_key, $sec_key, $use_test);
+        $this->api_client = new ChargX_API_Client( $endpoint, $pub_key, $sec_key, $use_test );
 
         return $this->api_client;
     }

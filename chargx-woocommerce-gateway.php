@@ -3,7 +3,7 @@
  * Plugin Name: ChargX Payment Gateway for WooCommerce
  * Description: ChargX payment gateway for WooCommerce (Credit Cards and Pay By Bank).
  * Author: ChargX
- * Version: 0.25.6
+ * Version: 0.26.0
  * Requires at least: 5.8
  * Requires PHP: 7.4
  * WC requires at least: 4.0
@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'CHARGX_WC_VERSION', '1.1.0' );
+define( 'CHARGX_WC_VERSION', '0.26.0' );
 define( 'CHARGX_WC_PLUGIN_FILE', __FILE__ );
 define( 'CHARGX_WC_PLUGIN_PATH', plugin_dir_path( __FILE__ ) );
 define( 'CHARGX_WC_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
@@ -30,6 +30,7 @@ function chargx_wc_init() {
     // Includes.
     require_once CHARGX_WC_PLUGIN_PATH . 'includes/class-chargx-logger.php';
     require_once CHARGX_WC_PLUGIN_PATH . 'includes/class-chargx-api-client.php';
+    require_once CHARGX_WC_PLUGIN_PATH . 'includes/class-chargx-webhook.php';
     require_once CHARGX_WC_PLUGIN_PATH . 'includes/class-wc-gateway-chargx-base.php';
     require_once CHARGX_WC_PLUGIN_PATH . 'includes/class-wc-gateway-chargx-card.php';
     require_once CHARGX_WC_PLUGIN_PATH . 'includes/class-wc-gateway-chargx-bank.php';
@@ -60,6 +61,7 @@ function chargx_wc_init() {
     add_action( 'wp_footer', 'chargx_refresh_checkout_on_payment_change' );
 }
 add_action( 'plugins_loaded', 'chargx_wc_init', 20 );
+add_action( 'woocommerce_init', 'chargx_maybe_ensure_webhook', 20 );
 
 register_activation_hook(__FILE__, 'chargx_activate');
 
@@ -170,7 +172,6 @@ function chargx_bank_transfer_discount( $cart ) {
     }
 
     $chosen_payment_method = WC()->session->get( 'chosen_payment_method' );
-    wc_get_logger()->info('chargx_bank_transfer_discount chosen_payment_method: ' . $chosen_payment_method, ['source' => 'chargx-woocommerce']);
 
     if ( $chosen_payment_method === 'chargx_bank' ) {
 
@@ -200,8 +201,6 @@ function chargx_refresh_checkout_on_payment_change() {
 }
 
 function chargx_activate() {
-    wc_get_logger()->info('chargx_activate', ['source' => 'chargx-woocommerce']);
-
     // enable card and bank gateways by default
     $gateways = [
         'chargx_bank',
@@ -217,6 +216,34 @@ function chargx_activate() {
                 'enabled' => 'yes'
             ]);
         }
+    }
+}
+
+/**
+ * Persist the ChargX webhook signing secret after install/upgrade.
+ * No-ops once the secret for the current site URL is already stored.
+ */
+function chargx_maybe_ensure_webhook() {
+    if ( ! function_exists( 'WC' ) || ! WC()->payment_gateways() ) {
+        return;
+    }
+
+    if ( get_transient( 'chargx_wc_webhook_ensure_lock' ) ) {
+        return;
+    }
+
+    $gateways = WC()->payment_gateways()->payment_gateways();
+    if ( empty( $gateways['chargx_card'] ) || ! is_object( $gateways['chargx_card'] ) ) {
+        return;
+    }
+
+    if ( ! method_exists( $gateways['chargx_card'], 'ensure_webhook' ) ) {
+        return;
+    }
+
+    $ok = $gateways['chargx_card']->ensure_webhook( false );
+    if ( ! $ok ) {
+        set_transient( 'chargx_wc_webhook_ensure_lock', 1, 10 * MINUTE_IN_SECONDS );
     }
 }
 

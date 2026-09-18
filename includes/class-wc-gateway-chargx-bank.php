@@ -313,26 +313,18 @@ class WC_Gateway_ChargX_Bank extends WC_Gateway_ChargX_Base {
     }
 
     /**
-     * Handle return from ChargX after successful bank payment.
+     * Browser return after bank payment. Redirects to thank-you only — never marks paid.
      */
     public function handle_return() {
         $order_id = absint( isset( $_GET['order_id'] ) ? $_GET['order_id'] : 0 );
+        $key      = isset( $_GET['key'] ) ? sanitize_text_field( wp_unslash( $_GET['key'] ) ) : '';
         $order    = wc_get_order( $order_id );
 
         if ( ! $order ) {
-            wp_die( esc_html__( 'Invalid order.', 'chargx-woocommerce' ), 400 );
+            wp_die( esc_html__( 'Invalid order.', 'chargx-woocommerce' ), '', array( 'response' => 400 ) );
         }
-
-        if ( ! empty( $_GET['chargx_order_id'] ) ) {
-            $order->update_meta_data( '_chargx_order_id', sanitize_text_field( wp_unslash( $_GET['chargx_order_id'] ) ) );
-        }
-        if ( ! empty( $_GET['chargx_order_display_id'] ) ) {
-            $order->update_meta_data( '_chargx_order_display_id', sanitize_text_field( wp_unslash( $_GET['chargx_order_display_id'] ) ) );
-        }
-        $order->save();
-
-        if ( ! empty( $_GET['chargx_order_id'] ) ) {
-            $order->payment_complete( sanitize_text_field( wp_unslash( $_GET['chargx_order_id'] ) ) );
+        if ( $key && ! hash_equals( (string) $order->get_order_key(), $key ) ) {
+            wp_die( esc_html__( 'Invalid order.', 'chargx-woocommerce' ), '', array( 'response' => 400 ) );
         }
 
         wp_safe_redirect( $this->get_return_url( $order ) );
