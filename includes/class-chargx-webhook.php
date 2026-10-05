@@ -148,6 +148,109 @@ class ChargX_Webhook {
     }
 
     /**
+     * Modes whose stored secret matches this request. Empty when the signature is invalid.
+     *
+     * @param string $raw_body
+     * @return string[] test and/or live, in that order
+     */
+    public static function matching_request_modes( $raw_body ) {
+        $by_mode = array();
+        foreach ( array( 'test', 'live' ) as $mode ) {
+            $row = self::get_for_mode( $mode );
+            if ( ! empty( $row['secret'] ) ) {
+                $by_mode[ $mode ] = (string) $row['secret'];
+            }
+        }
+        return self::matching_modes(
+            $raw_body,
+            self::get_request_header( 'Webhook-Signature' ),
+            self::get_request_header( 'Webhook-Timestamp' ),
+            $by_mode
+        );
+    }
+
+    /**
+     * @param string              $raw_body
+     * @param string              $signature_header
+     * @param string              $timestamp_header
+     * @param array<string,string> $secrets_by_mode
+     * @return string[]
+     */
+    public static function matching_modes( $raw_body, $signature_header, $timestamp_header, $secrets_by_mode ) {
+        $signed = self::signed_payload( $raw_body, $signature_header, $timestamp_header );
+        if ( '' === $signed || empty( $secrets_by_mode ) ) {
+            return array();
+        }
+
+        $provided = self::extract_v1_signature( $signature_header );
+        $matched  = array();
+        foreach ( array( 'test', 'live' ) as $mode ) {
+            if ( empty( $secrets_by_mode[ $mode ] ) ) {
+                continue;
+            }
+            $expected = hash_hmac( 'sha256', $signed, (string) $secrets_by_mode[ $mode ] );
+            if ( hash_equals( $expected, $provided ) ) {
+                $matched[] = $mode;
+            }
+        }
+        return $matched;
+    }
+
+    /**
+     * The event environment must be one of the modes whose secret signed the body.
+     *
+     * @param string[] $matched_modes
+     * @param string   $payload_environment
+     * @return bool
+     */
+    public static function environment_is_authorized( $matched_modes, $payload_environment ) {
+        $payload_environment = (string) $payload_environment;
+        return in_array( $payload_environment, array( 'test', 'live' ), true )
+            && in_array( $payload_environment, $matched_modes, true );
+    }
+
+    /**
+     * Compare money amounts in cents so "19.99" and 19.990 are the same value.
+     *
+     * @param mixed $expected
+     * @param mixed $actual
+     * @return bool
+     */
+    public static function amounts_match( $expected, $actual ) {
+        $expected_cents = self::amount_to_cents( $expected );
+        $actual_cents   = self::amount_to_cents( $actual );
+        return null !== $expected_cents && $expected_cents === $actual_cents;
+    }
+
+    /**
+     * @param mixed $amount
+     * @return int|null
+     */
+    public static function amount_to_cents( $amount ) {
+        if ( is_array( $amount ) && isset( $amount['numeric'] ) ) {
+            $amount = $amount['numeric'];
+        }
+        if ( is_string( $amount ) ) {
+            $amount = trim( $amount );
+        }
+        if ( ! is_numeric( $amount ) ) {
+            return null;
+        }
+        return (int) round( (float) $amount * 100 );
+    }
+
+    /**
+     * @param mixed $expected
+     * @param mixed $actual
+     * @return bool
+     */
+    public static function currencies_match( $expected, $actual ) {
+        $expected = strtolower( trim( (string) $expected ) );
+        $actual   = strtolower( trim( (string) $actual ) );
+        return '' !== $expected && $expected === $actual;
+    }
+
+    /**
      * @param string   $raw_body
      * @param string   $signature_header
      * @param string   $timestamp_header
@@ -155,24 +258,12 @@ class ChargX_Webhook {
      * @return bool
      */
     public static function verify_with_secrets( $raw_body, $signature_header, $timestamp_header, $secrets ) {
-        if ( '' === $raw_body || '' === $signature_header || '' === $timestamp_header || empty( $secrets ) ) {
-            return false;
-        }
-        if ( ! ctype_digit( (string) $timestamp_header ) ) {
-            return false;
-        }
-
-        $timestamp = (int) $timestamp_header;
-        if ( abs( time() - $timestamp ) > self::TIMESTAMP_TOLERANCE ) {
+        $signed = self::signed_payload( $raw_body, $signature_header, $timestamp_header );
+        if ( '' === $signed || empty( $secrets ) ) {
             return false;
         }
 
         $provided = self::extract_v1_signature( $signature_header );
-        if ( '' === $provided ) {
-            return false;
-        }
-
-        $signed = $timestamp . '.' . $raw_body;
         foreach ( $secrets as $secret ) {
             $expected = hash_hmac( 'sha256', $signed, (string) $secret );
             if ( hash_equals( $expected, $provided ) ) {
@@ -181,6 +272,33 @@ class ChargX_Webhook {
         }
 
         return false;
+    }
+
+    /**
+     * Canonical "{timestamp}.{body}" string, or '' when the request cannot be verified.
+     *
+     * @param string $raw_body
+     * @param string $signature_header
+     * @param string $timestamp_header
+     * @return string
+     */
+    protected static function signed_payload( $raw_body, $signature_header, $timestamp_header ) {
+        if ( '' === $raw_body || '' === $signature_header || '' === $timestamp_header ) {
+            return '';
+        }
+        if ( ! ctype_digit( (string) $timestamp_header ) ) {
+            return '';
+        }
+
+        $timestamp = (int) $timestamp_header;
+        if ( abs( time() - $timestamp ) > self::TIMESTAMP_TOLERANCE ) {
+            return '';
+        }
+        if ( '' === self::extract_v1_signature( $signature_header ) ) {
+            return '';
+        }
+
+        return $timestamp . '.' . $raw_body;
     }
 
     /**

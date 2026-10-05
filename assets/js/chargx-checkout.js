@@ -120,14 +120,11 @@
         return false;
       }
 
-      // Payment redirection flow: create payment request and redirect to external checkout
-      //
+      // Redirect flow has no card fields on this page. Let WooCommerce submit
+      // the checkout so the server can create the payment request and redirect.
       if (ChargXCardHandler.paymentRedirectionFlow) {
-        form.trigger("submit");
-        return;
+        return true;
       }
-      //
-      //
 
       e.preventDefault();
 

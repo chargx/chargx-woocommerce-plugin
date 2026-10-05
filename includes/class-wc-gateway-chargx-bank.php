@@ -173,10 +173,16 @@ class WC_Gateway_ChargX_Bank extends WC_Gateway_ChargX_Base {
         }
 
         $chargx_order_id = isset( $transaction['result']['orderId'] ) ? $transaction['result']['orderId'] : ( isset( $transaction['orderId'] ) ? $transaction['orderId'] : ( isset( $transaction['id'] ) ? $transaction['id'] : '' ) );
-        if ( $chargx_order_id ) {
-            $order->update_meta_data( '_chargx_order_id', $chargx_order_id );
+        $chargx_order_id = is_scalar( $chargx_order_id ) ? trim( (string) $chargx_order_id ) : '';
+        if ( '' === $chargx_order_id ) {
+            $this->log( 'ChargX bank transact response missing orderId', 'error' );
+            wc_add_notice( __( 'Payment could not be completed. Please try again.', 'chargx-woocommerce' ), 'error' );
+            wp_safe_redirect( wc_get_checkout_url() );
+            exit;
         }
-        $order->payment_complete( $chargx_order_id ?: 'bank' );
+        $this->store_payment_expectation( $order, $amount, $order->get_currency() );
+        $order->update_meta_data( '_chargx_order_id', $chargx_order_id );
+        $order->payment_complete( $chargx_order_id );
         $order->save();
 
         WC()->cart->empty_cart();
@@ -264,20 +270,33 @@ class WC_Gateway_ChargX_Bank extends WC_Gateway_ChargX_Base {
                         errEl.style.display = 'block';
                     }
 
+                    function cabbageOriginAllowed(origin) {
+                        try {
+                            var parsed = new URL(origin);
+                            if (parsed.protocol !== 'https:') {
+                                return false;
+                            }
+                            var host = parsed.hostname.toLowerCase();
+                            return host === 'cabbagepay.com' || (host.length > 15 && host.indexOf('.cabbagepay.com') === host.length - 15);
+                        } catch (e) {
+                            return false;
+                        }
+                    }
+
                     window.addEventListener('message', function(event) {
-      
+                        if (!cabbageOriginAllowed(event.origin)) {
+                            if (event.origin) {
+                                console.warn('[ChargX bank] ignored message from', event.origin);
+                            }
+                            return;
+                        }
+
                         try {
                             var data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
                   
                             if (!data || !data.message) return;
 
-                            console.log('[message] data.message', data.message);
                             if (data.message === 'success') {
-                                // At this point, you received a public_token for this bank connection flow.
-	                            // You can use this to fetch a bank_token.
-
-                                console.log('[message] data.public_token', data.public_token);
-
                                 var publicToken = data.public_token;
                                 if (!publicToken) { showError(); return; }
 
@@ -323,7 +342,8 @@ class WC_Gateway_ChargX_Bank extends WC_Gateway_ChargX_Base {
         if ( ! $order ) {
             wp_die( esc_html__( 'Invalid order.', 'chargx-woocommerce' ), '', array( 'response' => 400 ) );
         }
-        if ( $key && ! hash_equals( (string) $order->get_order_key(), $key ) ) {
+        $order_key = (string) $order->get_order_key();
+        if ( '' === $key || strlen( $key ) !== strlen( $order_key ) || ! hash_equals( $order_key, $key ) ) {
             wp_die( esc_html__( 'Invalid order.', 'chargx-woocommerce' ), '', array( 'response' => 400 ) );
         }
 

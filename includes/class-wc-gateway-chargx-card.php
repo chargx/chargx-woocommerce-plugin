@@ -209,11 +209,15 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
             $api = $this->get_api_client();
             $payment_redirect_success_url = ChargX_Webhook::success_url( $order );
             $this->log( 'payment_redirect_success_url: ' . $payment_redirect_success_url, 'info' );
-            $response = $api->create_payment_request( $order->get_total(), $order->get_currency(), "card", $payment_redirect_success_url );
+            $amount   = $order->get_total();
+            $currency = $order->get_currency();
+            $response = $api->create_payment_request( $amount, $currency, "card", $payment_redirect_success_url );
             if ( is_wp_error( $response ) ) {
                 wc_add_notice( __( 'Payment has been failed..', 'chargx-woocommerce' ), 'error' );
                 return;
             }
+            $this->store_payment_expectation( $order, $amount, $currency );
+            $order->save();
             $payment_request = $response['payment_request'];
             $checkout_url = $payment_request['checkout_url'] . '?success_url=' . urlencode($payment_redirect_success_url);
 
@@ -315,6 +319,7 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
             return;
         }
 
+        $this->store_payment_expectation( $order, $amount, $currency );
         $order->update_meta_data( '_chargx_order_id', $chargx_order_id );
         $order->update_meta_data( '_chargx_order_display_id', $order_display_id );
         $order->save();
@@ -334,9 +339,17 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
     }
 
     /**
-     * Mark a WooCommerce order paid only after a verified ChargX webhook.
+     * Mark a WooCommerce order paid only after the webhook matches the stored payment.
+     *
+     * @param int         $order_id
+     * @param string|null $chargx_order_id
+     * @param string|null $chargx_order_display_id
+     * @param string      $environment      test|live from the signed event
+     * @param mixed       $amount
+     * @param mixed       $currency
+     * @return WC_Order|null
      */
-    protected function complete_order( $order_id, $chargx_order_id = null, $chargx_order_display_id = null ) {
+    protected function complete_order( $order_id, $chargx_order_id = null, $chargx_order_display_id = null, $environment = '', $amount = null, $currency = null ) {
         $order = wc_get_order( $order_id );
         if ( ! $order ) {
             return null;
@@ -347,12 +360,32 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
             return null;
         }
 
-        if ( $order->is_paid() ) {
-            return $order;
-        }
-
         if ( empty( $chargx_order_id ) ) {
             return null;
+        }
+
+        $reason = $this->payment_completion_block_reason( $order, $chargx_order_id, $environment, $amount, $currency );
+        if ( '' !== $reason ) {
+            $this->log( 'payment completion blocked for order ' . $order->get_id() . ': ' . $reason, 'error' );
+            if ( ! $order->is_paid() ) {
+                $order->add_order_note(
+                    sprintf(
+                        /* translators: %s: why the ChargX payment was not applied */
+                        __( 'ChargX payment was not completed: %s', 'chargx-woocommerce' ),
+                        $reason
+                    )
+                );
+                $order->save();
+            }
+            return null;
+        }
+
+        if ( $order->is_paid() ) {
+            if ( '' === (string) $order->get_meta( '_chargx_order_id' ) ) {
+                $order->update_meta_data( '_chargx_order_id', $chargx_order_id );
+                $order->save();
+            }
+            return $order;
         }
 
         $order->update_meta_data( '_chargx_order_id', $chargx_order_id );
@@ -362,6 +395,78 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
         $order->payment_complete( $chargx_order_id );
         $order->save();
         return $order;
+    }
+
+    /**
+     * Empty string when the event may complete this order.
+     *
+     * @param WC_Order $order
+     * @param string   $chargx_order_id
+     * @param string   $environment
+     * @param mixed    $amount
+     * @param mixed    $currency
+     * @return string
+     */
+    protected function payment_completion_block_reason( $order, $chargx_order_id, $environment, $amount, $currency ) {
+        $expected_environment = (string) $order->get_meta( '_chargx_environment' );
+        if ( ! in_array( $expected_environment, array( 'test', 'live' ), true ) ) {
+            return __( 'order has no ChargX environment', 'chargx-woocommerce' );
+        }
+        if ( $expected_environment !== (string) $environment ) {
+            return __( 'event environment does not match the order', 'chargx-woocommerce' );
+        }
+
+        $expected_amount   = $order->get_meta( '_chargx_amount' );
+        $expected_currency = $order->get_meta( '_chargx_currency' );
+        if ( '' === (string) $expected_amount || '' === (string) $expected_currency ) {
+            return __( 'order has no stored amount or currency', 'chargx-woocommerce' );
+        }
+        if ( ! ChargX_Webhook::amounts_match( $expected_amount, $amount ) ) {
+            return __( 'payment amount does not match the order', 'chargx-woocommerce' );
+        }
+        if ( ! ChargX_Webhook::currencies_match( $expected_currency, $currency ) ) {
+            return __( 'payment currency does not match the order', 'chargx-woocommerce' );
+        }
+
+        $stored_id = (string) $order->get_meta( '_chargx_order_id' );
+        if ( '' !== $stored_id && $stored_id !== (string) $chargx_order_id ) {
+            return __( 'transaction does not match the one stored on this order', 'chargx-woocommerce' );
+        }
+        if ( $this->transaction_is_used_on_another_order( $chargx_order_id, $order->get_id() ) ) {
+            return __( 'transaction was already used for another order', 'chargx-woocommerce' );
+        }
+
+        return '';
+    }
+
+    /**
+     * @param string $chargx_order_id
+     * @param int    $order_id
+     * @return bool
+     */
+    protected function transaction_is_used_on_another_order( $chargx_order_id, $order_id ) {
+        if ( ! function_exists( 'wc_get_orders' ) ) {
+            return false;
+        }
+
+        $found = wc_get_orders(
+            array(
+                'limit'        => 2,
+                'return'       => 'ids',
+                'meta_key'     => '_chargx_order_id',
+                'meta_value'   => (string) $chargx_order_id,
+                'meta_compare' => '=',
+            )
+        );
+        if ( ! is_array( $found ) ) {
+            return false;
+        }
+        foreach ( $found as $found_id ) {
+            if ( (int) $found_id !== (int) $order_id ) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -378,7 +483,8 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
         if ( ! $order ) {
             wp_die( 'Invalid order', '', array( 'response' => 400 ) );
         }
-        if ( $key && ! hash_equals( (string) $order->get_order_key(), $key ) ) {
+        $order_key = (string) $order->get_order_key();
+        if ( '' === $key || strlen( $key ) !== strlen( $order_key ) || ! hash_equals( $order_key, $key ) ) {
             wp_die( 'Invalid order', '', array( 'response' => 400 ) );
         }
 
@@ -734,7 +840,8 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
             wp_die( 'Webhook secret not configured', '', array( 'response' => 503 ) );
         }
 
-        if ( ! ChargX_Webhook::verify_request( $raw_body ) ) {
+        $matched_modes = ChargX_Webhook::matching_request_modes( $raw_body );
+        if ( empty( $matched_modes ) ) {
             $this->log( 'handle_webhook_success_payment rejected: invalid signature', 'error' );
             status_header( 401 );
             wp_die( 'Invalid signature', '', array( 'response' => 401 ) );
@@ -753,10 +860,18 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
             wp_send_json( array( 'received' => true, 'ignored' => true ) );
         }
 
+        $environment = isset( $payload['environment'] ) ? (string) $payload['environment'] : '';
+        if ( ! ChargX_Webhook::environment_is_authorized( $matched_modes, $environment ) ) {
+            $this->log( 'handle_webhook_success_payment rejected: environment ' . $environment . ' is not signed by ' . implode( ',', $matched_modes ), 'error' );
+            wp_send_json( array( 'received' => true, 'ignored' => true ) );
+        }
+
         $object                  = isset( $payload['data']['object'] ) && is_array( $payload['data']['object'] ) ? $payload['data']['object'] : array();
         $order_id                = absint( isset( $object['external_order_id'] ) ? $object['external_order_id'] : 0 );
         $chargx_order_id         = isset( $object['order_id'] ) ? $object['order_id'] : null;
         $chargx_order_display_id = isset( $object['order_display_id'] ) ? $object['order_display_id'] : null;
+        $amount                  = isset( $object['amount'] ) ? $object['amount'] : null;
+        $currency                = isset( $object['currency_code'] ) ? $object['currency_code'] : '';
 
         $this->log( 'handle_webhook_success_payment. order_id: ' . $order_id, 'info' );
 
@@ -764,7 +879,7 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
             wp_send_json( array( 'received' => true, 'ignored' => true ) );
         }
 
-        $order = $this->complete_order( $order_id, $chargx_order_id, $chargx_order_display_id );
+        $order = $this->complete_order( $order_id, $chargx_order_id, $chargx_order_display_id, $environment, $amount, $currency );
         if ( ! $order ) {
             $this->log( 'handle_webhook_success_payment: order not completable ' . $order_id, 'error' );
             wp_send_json( array( 'received' => true, 'ignored' => true ) );
