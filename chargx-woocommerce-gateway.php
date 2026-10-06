@@ -220,8 +220,8 @@ function chargx_activate() {
 }
 
 /**
- * Persist the ChargX webhook signing secret after install/upgrade.
- * No-ops once the secret for the current site URL is already stored.
+ * Persist the ChargX webhook signing secret and required events after install/upgrade.
+ * No-ops once the secret and payment.succeeded / payment.failed subscription are stored.
  */
 function chargx_maybe_ensure_webhook() {
     if ( ! function_exists( 'WC' ) || ! WC()->payment_gateways() ) {

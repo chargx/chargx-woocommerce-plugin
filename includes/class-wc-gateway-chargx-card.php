@@ -15,6 +15,13 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
      */
     private static $popup_rendered = false;
 
+    /**
+     * Events this plugin must receive on the store webhook.
+     *
+     * @var string[]
+     */
+    const WEBHOOK_EVENTS = array( 'payment.succeeded', 'payment.failed' );
+
     public function __construct() {
         $this->id                 = 'chargx_card';
         $this->method_title       = __( 'ChargX – Credit Card', 'chargx-woocommerce' );
@@ -23,7 +30,7 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
         parent::__construct();
 
         add_action('woocommerce_api_wc_gateway_chargx_card_success_url', [$this, 'handle_return']);
-        add_action('woocommerce_api_wc_gateway_chargx_card_success_url_webhook', [$this, 'handle_webhook_success_payment']);
+        add_action('woocommerce_api_wc_gateway_chargx_card_success_url_webhook', [$this, 'handle_webhook']);
         add_action('woocommerce_api_chargx_order_status', [$this, 'ajax_order_status']);
 
         add_action( 'woocommerce_before_thankyou', array( $this, 'show_order_received_popup' ), 10, 1 );
@@ -65,8 +72,9 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
 
         $mode        = ( 'yes' === $this->testmode ) ? 'test' : 'live';
         $webhook_url = ChargX_Webhook::webhook_url();
+        $configured  = ChargX_Webhook::is_configured_for( $mode, $webhook_url );
 
-        if ( ! $force && ChargX_Webhook::is_configured_for( $mode, $webhook_url ) ) {
+        if ( ! $force && $configured && ChargX_Webhook::has_events( $mode, self::WEBHOOK_EVENTS ) ) {
             return true;
         }
 
@@ -93,16 +101,23 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
         }
 
         if ( $match && ! empty( $match['id'] ) ) {
-            if ( ! $force && ChargX_Webhook::is_configured_for( $mode, $webhook_url ) ) {
+            if ( ! $this->ensure_remote_webhook_events( $api, $match ) ) {
+                return false;
+            }
+
+            if ( ! $force && $configured ) {
+                ChargX_Webhook::save_events_for_mode( $mode, self::WEBHOOK_EVENTS );
+                $this->log( 'ensure_webhook events updated for ' . $webhook_url, 'info' );
                 return true;
             }
+
             $rotated = $api->rotate_webhook_secret( $match['id'] );
             if ( is_wp_error( $rotated ) || empty( $rotated['secret'] ) ) {
                 $message = is_wp_error( $rotated ) ? $rotated->get_error_message() : 'missing secret';
                 $this->log( 'ensure_webhook rotate error: ' . $message, 'error' );
                 return false;
             }
-            ChargX_Webhook::save_for_mode( $mode, $match['id'], $rotated['secret'], $webhook_url );
+            ChargX_Webhook::save_for_mode( $mode, $match['id'], $rotated['secret'], $webhook_url, self::WEBHOOK_EVENTS );
             $this->log( 'ensure_webhook rotated secret for ' . $webhook_url, 'info' );
             return true;
         }
@@ -110,7 +125,7 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
         $result = $api->create_webhook(
             $webhook_url,
             'WOO',
-            array( 'payment.succeeded' ),
+            self::WEBHOOK_EVENTS,
             true
         );
         if ( is_wp_error( $result ) ) {
@@ -125,8 +140,33 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
             return false;
         }
 
-        ChargX_Webhook::save_for_mode( $mode, $endpoint_id, $secret, $webhook_url );
+        ChargX_Webhook::save_for_mode( $mode, $endpoint_id, $secret, $webhook_url, self::WEBHOOK_EVENTS );
         $this->log( 'ensure_webhook created: ' . $webhook_url, 'info' );
+        return true;
+    }
+
+    /**
+     * Subscribe an existing ChargX endpoint to payment.failed without dropping other events.
+     *
+     * @param ChargX_API_Client $api
+     * @param array             $endpoint
+     * @return bool
+     */
+    protected function ensure_remote_webhook_events( $api, $endpoint ) {
+        $current = isset( $endpoint['events'] ) && is_array( $endpoint['events'] ) ? $endpoint['events'] : array();
+        $missing = array_diff( self::WEBHOOK_EVENTS, $current );
+        if ( empty( $missing ) ) {
+            return true;
+        }
+
+        $merged  = array_values( array_unique( array_merge( $current, self::WEBHOOK_EVENTS ) ) );
+        $updated = $api->update_webhook( $endpoint['id'], $merged );
+        if ( is_wp_error( $updated ) ) {
+            $this->log( 'ensure_webhook update events error: ' . $updated->get_error_message(), 'error' );
+            return false;
+        }
+
+        $this->log( 'ensure_webhook subscribed events: ' . implode( ',', $merged ), 'info' );
         return true;
     }
 
@@ -470,6 +510,67 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
     }
 
     /**
+     * Mark a WooCommerce order failed after a verified payment.failed webhook.
+     *
+     * @param int         $order_id
+     * @param string|null $chargx_order_id
+     * @param string|null $chargx_order_display_id
+     * @param string      $failure_message
+     * @param string      $environment test|live from the signed event
+     * @return WC_Order|null
+     */
+    protected function fail_order( $order_id, $chargx_order_id = null, $chargx_order_display_id = null, $failure_message = '', $environment = '' ) {
+        $order = wc_get_order( $order_id );
+        if ( ! $order ) {
+            return null;
+        }
+
+        $allowed_methods = array( 'chargx_card', 'chargx_bank' );
+        if ( ! in_array( $order->get_payment_method(), $allowed_methods, true ) ) {
+            return null;
+        }
+
+        if ( $order->is_paid() ) {
+            return $order;
+        }
+
+        $expected_environment = (string) $order->get_meta( '_chargx_environment' );
+        if ( in_array( $expected_environment, array( 'test', 'live' ), true ) && $expected_environment !== (string) $environment ) {
+            return null;
+        }
+
+        $stored_id = (string) $order->get_meta( '_chargx_order_id' );
+        if ( '' !== $stored_id && ! empty( $chargx_order_id ) && $stored_id !== (string) $chargx_order_id ) {
+            return null;
+        }
+
+        $status = $order->get_status();
+        if ( in_array( $status, array( 'failed', 'cancelled', 'refunded' ), true ) ) {
+            return $order;
+        }
+
+        if ( ! empty( $chargx_order_id ) ) {
+            $order->update_meta_data( '_chargx_order_id', $chargx_order_id );
+        }
+        if ( ! empty( $chargx_order_display_id ) ) {
+            $order->update_meta_data( '_chargx_order_display_id', $chargx_order_display_id );
+        }
+        $order->delete_meta_data( '_chargx_pending_confirm' );
+
+        $note = __( 'ChargX payment failed.', 'chargx-woocommerce' );
+        if ( is_string( $failure_message ) && '' !== $failure_message ) {
+            $note = sprintf(
+                /* translators: %s: processor failure message */
+                __( 'ChargX payment failed: %s', 'chargx-woocommerce' ),
+                $failure_message
+            );
+        }
+
+        $order->update_status( 'failed', $note );
+        return $order;
+    }
+
+    /**
      * Browser return from the ChargX Payment Form.
      * Redirects to the thank-you page only — never marks the order as paid.
      */
@@ -749,7 +850,7 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
                     fetch(statusUrl)
                         .then(function(r) { return r.json(); })
                         .then(function(data) {
-                            if (data.completed) {
+                            if (data.completed || data.failed) {
                                 refreshThankYouPage();
                             }
                         })
@@ -814,20 +915,22 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
         $status = $order->get_status();
         $this->log('ajax_order_status. status: ' . $status, 'info');
         $completed = in_array( $status, array( 'processing', 'completed' ), true );
+        $failed    = in_array( $status, array( 'failed', 'cancelled' ), true );
         $from_popup = isset( $_GET['from_popup'] ) && '1' === $_GET['from_popup'];
-        if ( $completed && $from_popup ) {
+        if ( ( $completed || $failed ) && $from_popup ) {
             delete_transient( 'chargx_return_poll_' . $order_id );
             $order->delete_meta_data( '_chargx_pending_confirm' );
             $order->save();
         }
-        wp_send_json( array( 'completed' => $completed, 'status' => $status ) );
+        wp_send_json( array( 'completed' => $completed, 'failed' => $failed, 'status' => $status ) );
     }
 
     /**
-     * Server-to-server payment.succeeded. Marks the order paid only after HMAC verification.
+     * Server-to-server payment.succeeded / payment.failed.
+     * Updates the WooCommerce order only after HMAC verification.
      */
-    public function handle_webhook_success_payment() {
-        $this->log( 'handle_webhook_success_payment', 'info' );
+    public function handle_webhook() {
+        $this->log( 'handle_webhook', 'info' );
 
         $raw_body = file_get_contents( 'php://input' );
         if ( false === $raw_body ) {
@@ -835,14 +938,14 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
         }
 
         if ( empty( ChargX_Webhook::secrets() ) ) {
-            $this->log( 'handle_webhook_success_payment rejected: signing secret not stored', 'error' );
+            $this->log( 'handle_webhook rejected: signing secret not stored', 'error' );
             status_header( 503 );
             wp_die( 'Webhook secret not configured', '', array( 'response' => 503 ) );
         }
 
         $matched_modes = ChargX_Webhook::matching_request_modes( $raw_body );
         if ( empty( $matched_modes ) ) {
-            $this->log( 'handle_webhook_success_payment rejected: invalid signature', 'error' );
+            $this->log( 'handle_webhook rejected: invalid signature', 'error' );
             status_header( 401 );
             wp_die( 'Invalid signature', '', array( 'response' => 401 ) );
         }
@@ -853,19 +956,15 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
             wp_die( 'Invalid payload', '', array( 'response' => 400 ) );
         }
 
-        $this->log( 'handle_webhook_success_payment payload: ' . ChargX_Logger::encode( $payload ), 'info' );
-
-        $type = isset( $payload['type'] ) ? $payload['type'] : '';
-        if ( 'payment.succeeded' !== $type ) {
-            wp_send_json( array( 'received' => true, 'ignored' => true ) );
-        }
+        $this->log( 'handle_webhook payload: ' . ChargX_Logger::encode( $payload ), 'info' );
 
         $environment = isset( $payload['environment'] ) ? (string) $payload['environment'] : '';
         if ( ! ChargX_Webhook::environment_is_authorized( $matched_modes, $environment ) ) {
-            $this->log( 'handle_webhook_success_payment rejected: environment ' . $environment . ' is not signed by ' . implode( ',', $matched_modes ), 'error' );
+            $this->log( 'handle_webhook rejected: environment ' . $environment . ' is not signed by ' . implode( ',', $matched_modes ), 'error' );
             wp_send_json( array( 'received' => true, 'ignored' => true ) );
         }
 
+        $type                    = isset( $payload['type'] ) ? $payload['type'] : '';
         $object                  = isset( $payload['data']['object'] ) && is_array( $payload['data']['object'] ) ? $payload['data']['object'] : array();
         $order_id                = absint( isset( $object['external_order_id'] ) ? $object['external_order_id'] : 0 );
         $chargx_order_id         = isset( $object['order_id'] ) ? $object['order_id'] : null;
@@ -873,18 +972,37 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
         $amount                  = isset( $object['amount'] ) ? $object['amount'] : null;
         $currency                = isset( $object['currency_code'] ) ? $object['currency_code'] : '';
 
-        $this->log( 'handle_webhook_success_payment. order_id: ' . $order_id, 'info' );
+        $this->log( 'handle_webhook type=' . $type . ' order_id=' . $order_id, 'info' );
 
-        if ( ! $order_id || empty( $chargx_order_id ) ) {
-            wp_send_json( array( 'received' => true, 'ignored' => true ) );
+        if ( 'payment.succeeded' === $type ) {
+            if ( ! $order_id || empty( $chargx_order_id ) ) {
+                wp_send_json( array( 'received' => true, 'ignored' => true ) );
+            }
+
+            $order = $this->complete_order( $order_id, $chargx_order_id, $chargx_order_display_id, $environment, $amount, $currency );
+            if ( ! $order ) {
+                $this->log( 'handle_webhook: order not completable ' . $order_id, 'error' );
+                wp_send_json( array( 'received' => true, 'ignored' => true ) );
+            }
+
+            wp_send_json( array( 'received' => true, 'order_id' => $order->get_id() ) );
         }
 
-        $order = $this->complete_order( $order_id, $chargx_order_id, $chargx_order_display_id, $environment, $amount, $currency );
-        if ( ! $order ) {
-            $this->log( 'handle_webhook_success_payment: order not completable ' . $order_id, 'error' );
-            wp_send_json( array( 'received' => true, 'ignored' => true ) );
+        if ( 'payment.failed' === $type ) {
+            if ( ! $order_id ) {
+                wp_send_json( array( 'received' => true, 'ignored' => true ) );
+            }
+
+            $failure_message = isset( $object['failure_message'] ) ? sanitize_text_field( $object['failure_message'] ) : '';
+            $order           = $this->fail_order( $order_id, $chargx_order_id, $chargx_order_display_id, $failure_message, $environment );
+            if ( ! $order ) {
+                $this->log( 'handle_webhook: order not failable ' . $order_id, 'error' );
+                wp_send_json( array( 'received' => true, 'ignored' => true ) );
+            }
+
+            wp_send_json( array( 'received' => true, 'order_id' => $order->get_id(), 'status' => $order->get_status() ) );
         }
 
-        wp_send_json( array( 'received' => true, 'order_id' => $order->get_id() ) );
+        wp_send_json( array( 'received' => true, 'ignored' => true ) );
     }
 }

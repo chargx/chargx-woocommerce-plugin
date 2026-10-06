@@ -36,7 +36,7 @@ class ChargX_Webhook {
     }
 
     /**
-     * Public webhook URL ChargX POSTs payment.succeeded to.
+     * Public webhook URL ChargX POSTs payment.succeeded and payment.failed to.
      *
      * @return string
      */
@@ -73,13 +73,47 @@ class ChargX_Webhook {
      * @param string $secret Plain webhook signing secret
      * @param string $url    Registered URL
      */
-    public static function save_for_mode( $mode, $id, $secret, $url ) {
+    public static function save_for_mode( $mode, $id, $secret, $url, $events = array() ) {
         $stored           = self::get_stored();
         $stored[ $mode ]  = array(
             'id'     => (string) $id,
             'secret' => (string) $secret,
             'url'    => (string) $url,
+            'events' => array_values( $events ),
         );
+        update_option( self::OPTION_KEY, $stored, false );
+    }
+
+    /**
+     * True when the stored endpoint already subscribes to every required event.
+     *
+     * @param string   $mode
+     * @param string[] $required
+     * @return bool
+     */
+    public static function has_events( $mode, $required ) {
+        $row    = self::get_for_mode( $mode );
+        $events = isset( $row['events'] ) && is_array( $row['events'] ) ? $row['events'] : array();
+        foreach ( $required as $event ) {
+            if ( ! in_array( $event, $events, true ) ) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Remember which events the stored endpoint subscribes to, without rotating the secret.
+     *
+     * @param string   $mode
+     * @param string[] $events
+     */
+    public static function save_events_for_mode( $mode, $events ) {
+        $stored = self::get_stored();
+        if ( empty( $stored[ $mode ] ) || ! is_array( $stored[ $mode ] ) ) {
+            return;
+        }
+        $stored[ $mode ]['events'] = array_values( $events );
         update_option( self::OPTION_KEY, $stored, false );
     }
 
