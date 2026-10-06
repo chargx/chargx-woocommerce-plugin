@@ -155,6 +155,37 @@ class ChargX_API_Client {
     }
 
     /**
+     * Generic PATCH to Admin API with secret key.
+     *
+     * @param string $path
+     * @param array  $body
+     * @return array|WP_Error
+     */
+    protected function admin_patch( $path, $body = array() ) {
+        if ( empty( $this->secret_key ) ) {
+            return new WP_Error( 'chargx_no_secret', __( 'ChargX secret key is missing.', 'chargx-woocommerce' ) );
+        }
+
+        $url = trailingslashit( $this->admin_endpoint ) . ltrim( $path, '/' );
+
+        $response = wp_remote_request(
+            $url,
+            array(
+                'method'  => 'PATCH',
+                'timeout' => 30,
+                'headers' => array(
+                    'Authorization' => 'Basic ' . $this->secret_key,
+                    'Content-Type'  => 'application/json',
+                    'Accept'        => 'application/json',
+                ),
+                'body'    => wp_json_encode( $body ),
+            )
+        );
+
+        return $this->handle_response( $response );
+    }
+
+    /**
      * Handle HTTP response.
      *
      * @param array|WP_Error $response
@@ -338,12 +369,12 @@ class ChargX_API_Client {
      *
      * @param string   $url         Webhook URL.
      * @param string   $name        Webhook name (e.g. "WOO").
-     * @param string[] $events      Event names (e.g. ["payment.succeeded"]).
+     * @param string[] $events      Event names (e.g. ["payment.succeeded", "payment.failed"]).
      * @param bool     $enabled     Whether the webhook is enabled.
      * @param string   $environment "test" or "live".
      * @return array|WP_Error
      */
-    public function create_webhook( $url, $name = 'WOO', $events = array( 'payment.succeeded' ), $enabled = true) {
+    public function create_webhook( $url, $name = 'WOO', $events = array( 'payment.succeeded', 'payment.failed' ), $enabled = true) {
         $body = array(
             'url'         => $url,
             'name'        => $name,
@@ -364,6 +395,20 @@ class ChargX_API_Client {
     public function rotate_webhook_secret( $id ) {
         $id = rawurlencode( (string) $id );
         return $this->admin_post( 'webhook/' . $id . '/rotate-secret', array() );
+    }
+
+    /**
+     * Update webhook events (Admin API).
+     *
+     * PATCH /admin/webhook/:id
+     *
+     * @param string   $id     Webhook endpoint id.
+     * @param string[] $events Event names.
+     * @return array|WP_Error
+     */
+    public function update_webhook( $id, $events ) {
+        $id = rawurlencode( (string) $id );
+        return $this->admin_patch( 'webhook/' . $id, array( 'events' => array_values( $events ) ) );
     }
 
     /**
