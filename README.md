@@ -40,7 +40,7 @@ No new settings. After you install this version:
 
 - A signed `payment.succeeded` event marks the order paid only when the amount, currency, and test/live mode match the checkout, and the ChargX transaction has not already paid another order.
 - `payment.failed` marks the order failed. A later successful payment for the same order can still move it from Failed to paid.
-- Partial refunds send the WooCommerce amount to ChargX. WiPay and TailoredPay still reject a partial amount, and WooCommerce shows that error.
+- Partial refunds send the WooCommerce amount to ChargX.
 - The card and bank return URLs require the order key.
 - Pay-By-Bank accepts the bank widget message only from `cabbagepay.com`.
 
