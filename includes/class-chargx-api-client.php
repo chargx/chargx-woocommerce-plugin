@@ -337,9 +337,19 @@ class ChargX_API_Client {
      * Refund transaction.
      *
      * POST /transaction/refund
+     *
+     * @param string     $order_id ChargX order id.
+     * @param float|null $amount   Requested amount. Omit for a full refund.
+     * @return array|WP_Error
      */
-    public function refund( $order_id ) {
-        return $this->post( 'transaction/refund', array( 'orderId' => (string) $order_id ) );
+    public function refund( $order_id, $amount = null ) {
+        $body = array(
+            'orderId' => (string) $order_id,
+        );
+        if ( null !== $amount && '' !== $amount ) {
+            $body['amount'] = (float) $amount;
+        }
+        return $this->post( 'transaction/refund', $body );
     }
 
     /**

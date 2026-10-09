@@ -257,6 +257,21 @@ abstract class WC_Gateway_ChargX_Base extends WC_Payment_Gateway {
     }
 
     /**
+     * Remember the amount, currency, and environment sent to ChargX.
+     * The payment webhook must match this snapshot.
+     *
+     * @param WC_Order   $order
+     * @param float      $amount
+     * @param string     $currency
+     */
+    protected function store_payment_expectation( $order, $amount, $currency ) {
+        $mode = ( 'yes' === $this->testmode ) ? 'test' : 'live';
+        $order->update_meta_data( '_chargx_amount', (string) (float) $amount );
+        $order->update_meta_data( '_chargx_currency', strtolower( (string) $currency ) );
+        $order->update_meta_data( '_chargx_environment', $mode );
+    }
+
+    /**
      * Common refund handler.
      *
      * @param int    $order_id
@@ -279,7 +294,7 @@ abstract class WC_Gateway_ChargX_Base extends WC_Payment_Gateway {
         $this->log( "Refund requested for order {$order->get_id()}, ChargX orderId {$chargx_order_id}, amount {$amount}" );
 
         $api      = $this->get_api_client();
-        $response = $api->refund( $chargx_order_id );
+        $response = $api->refund( $chargx_order_id, $amount );
 
         if ( is_wp_error( $response ) ) {
             return $response;
