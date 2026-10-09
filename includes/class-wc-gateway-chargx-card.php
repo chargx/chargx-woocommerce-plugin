@@ -469,7 +469,10 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
         }
 
         $stored_id = (string) $order->get_meta( '_chargx_order_id' );
-        if ( '' !== $stored_id && $stored_id !== (string) $chargx_order_id ) {
+        // A failed attempt stores its own ChargX id. A later successful attempt
+        // for the same Woo order has a new id and may replace it. A paid order
+        // keeps the id that completed it.
+        if ( '' !== $stored_id && $stored_id !== (string) $chargx_order_id && 'failed' !== $order->get_status() ) {
             return __( 'transaction does not match the one stored on this order', 'chargx-woocommerce' );
         }
         if ( $this->transaction_is_used_on_another_order( $chargx_order_id, $order->get_id() ) ) {
