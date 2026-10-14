@@ -34,6 +34,10 @@ You'll need to provide credentials from your ChargX Dashboard:
 | **Test Secret API Key (Admin API)** | Used for server-side API calls in Test mode|
 | **Sandbox / Test Mode** | Sandbox or Production mode |
 
+## Updating to 0.27.1
+
+No new settings. Stores with a non-USD currency (e.g. GBP) can complete card orders again. ChargX charges these orders in USD, so the `payment.succeeded` check now compares the webhook's `original_amount` and `original_currency` with the checkout amount and currency. Orders in USD are checked as before.
+
 ## Updating to 0.27.0
 
 No new settings. After you install this version:

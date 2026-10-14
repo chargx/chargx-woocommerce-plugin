@@ -285,6 +285,32 @@ class ChargX_Webhook {
     }
 
     /**
+     * Amount and currency of the payment request this plugin created.
+     *
+     * ChargX converts non-USD payment requests to USD, so amount / currency_code
+     * are the USD charge. original_amount / original_currency hold the request
+     * amount and are null when the request was already USD.
+     *
+     * @param array $object payment.succeeded data.object
+     * @return array{amount: mixed, currency: string}
+     */
+    public static function requested_amount( $object ) {
+        $original_amount   = isset( $object['original_amount'] ) ? $object['original_amount'] : null;
+        $original_currency = isset( $object['original_currency'] ) ? trim( (string) $object['original_currency'] ) : '';
+        if ( null !== self::amount_to_cents( $original_amount ) && '' !== $original_currency ) {
+            return array(
+                'amount'   => $original_amount,
+                'currency' => $original_currency,
+            );
+        }
+
+        return array(
+            'amount'   => isset( $object['amount'] ) ? $object['amount'] : null,
+            'currency' => isset( $object['currency_code'] ) ? (string) $object['currency_code'] : '',
+        );
+    }
+
+    /**
      * @param string   $raw_body
      * @param string   $signature_header
      * @param string   $timestamp_header

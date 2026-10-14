@@ -972,8 +972,9 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
         $order_id                = absint( isset( $object['external_order_id'] ) ? $object['external_order_id'] : 0 );
         $chargx_order_id         = isset( $object['order_id'] ) ? $object['order_id'] : null;
         $chargx_order_display_id = isset( $object['order_display_id'] ) ? $object['order_display_id'] : null;
-        $amount                  = isset( $object['amount'] ) ? $object['amount'] : null;
-        $currency                = isset( $object['currency_code'] ) ? $object['currency_code'] : '';
+        $requested               = ChargX_Webhook::requested_amount( $object );
+        $amount                  = $requested['amount'];
+        $currency                = $requested['currency'];
 
         $this->log( 'handle_webhook type=' . $type . ' order_id=' . $order_id, 'info' );
 
