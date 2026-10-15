@@ -154,6 +154,50 @@ chargx_assert(
     'missing currency does not match'
 );
 
+$converted = ChargX_Webhook::requested_amount(
+    array(
+        'amount'            => 126.53,
+        'currency_code'     => 'usd',
+        'original_amount'   => 100,
+        'original_currency' => 'gbp',
+    )
+);
+chargx_assert(
+    ChargX_Webhook::amounts_match( '100', $converted['amount'] )
+        && ChargX_Webhook::currencies_match( 'gbp', $converted['currency'] ),
+    'a converted payment matches the original request amount and currency'
+);
+
+chargx_assert(
+    ! ChargX_Webhook::amounts_match( '200', $converted['amount'] ),
+    'a converted payment does not match a different original amount'
+);
+
+$usd = ChargX_Webhook::requested_amount(
+    array(
+        'amount'            => array( 'numeric' => 19.99 ),
+        'currency_code'     => 'usd',
+        'original_amount'   => null,
+        'original_currency' => null,
+    )
+);
+chargx_assert(
+    ChargX_Webhook::amounts_match( '19.99', $usd['amount'] ) && 'usd' === $usd['currency'],
+    'a USD payment uses amount and currency_code'
+);
+
+$partial = ChargX_Webhook::requested_amount(
+    array(
+        'amount'          => 10,
+        'currency_code'   => 'usd',
+        'original_amount' => 8,
+    )
+);
+chargx_assert(
+    10 === $partial['amount'] && 'usd' === $partial['currency'],
+    'original amount without original currency is ignored'
+);
+
 chargx_assert(
     ChargX_Webhook::extract_v1_signature( 'v1=abc' ) === 'abc',
     'extracts v1= from the signature header'

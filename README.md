@@ -1,6 +1,6 @@
 # ChargX Payment Gateway plugin for WooCommerce
 
-ChargX payment gateway for WooCommerce (Credit Cards + Pay By Bank).
+ChargX payment gateway for WooCommerce (Credit Cards).
 
 Documentation https://docs.chargx.io/woocommerce
 
@@ -18,11 +18,11 @@ Documentation https://docs.chargx.io/woocommerce
 3. Enable ChargX payments
 - Go to **WooCommerce → Settings → Payments**
 - Locate **ChargX - ...** in the payments list.
-- Toggle the switch to **Enabled** for required payment methods (e.g. Credit Card, Pay By Bank)
+- Toggle the switch to **Enabled** for **ChargX – Credit Card**
 
 4. Configure API keys
 
-Click **Manage** on each of the ChargX payment methods to open configuration settings.
+Click **Manage** on **ChargX – Credit Card** to open configuration settings.
 
 You'll need to provide credentials from your ChargX Dashboard:
 
@@ -33,6 +33,12 @@ You'll need to provide credentials from your ChargX Dashboard:
 | **Live Secret API Key (Admin API)** | Used for server-side API calls in Production mode|
 | **Test Secret API Key (Admin API)** | Used for server-side API calls in Test mode|
 | **Sandbox / Test Mode** | Sandbox or Production mode |
+
+## Updating to 0.27.1
+
+No new settings. Stores with a non-USD currency (e.g. GBP) can complete card orders again. ChargX charges these orders in USD, so the `payment.succeeded` check now compares the webhook's `original_amount` and `original_currency` with the checkout amount and currency. Orders in USD are checked as before.
+
+Pay-By-Bank has been removed from checkout and from **WooCommerce → Settings → Payments**.
 
 ## Updating to 0.27.0
 
