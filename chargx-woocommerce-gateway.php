@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name: ChargX Payment Gateway for WooCommerce
- * Description: ChargX payment gateway for WooCommerce (Credit Cards and Pay By Bank).
+ * Description: ChargX payment gateway for WooCommerce (Credit Cards).
  * Author: ChargX
  * Version: 0.27.1
  * Requires at least: 5.8
@@ -55,8 +55,6 @@ function chargx_wc_init() {
         }
     });
 
-    // add 5% discount to the order for bank to bank transfer
-    add_action( 'woocommerce_cart_calculate_fees', 'chargx_bank_transfer_discount' );
     // That hook injects JavaScript into the page footer to refresh the checkout when the payment method is changed
     add_action( 'wp_footer', 'chargx_refresh_checkout_on_payment_change' );
 }
@@ -73,7 +71,6 @@ register_activation_hook(__FILE__, 'chargx_activate');
  */
 function chargx_wc_register_gateways( $gateways ) {
     $gateways[] = 'WC_Gateway_ChargX_Card';
-    $gateways[] = 'WC_Gateway_ChargX_Bank';
 
     return $gateways;
 }
@@ -201,11 +198,8 @@ function chargx_refresh_checkout_on_payment_change() {
 }
 
 function chargx_activate() {
-    // enable card and bank gateways by default
-    $gateways = [
-        'chargx_bank',
-        'chargx_card',
-    ];
+    // enable ChargX gateways by default
+    $gateways = [ 'chargx_card' ];
 
     foreach ($gateways as $gateway) {
 
