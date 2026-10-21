@@ -34,6 +34,14 @@ You'll need to provide credentials from your ChargX Dashboard:
 | **Test Secret API Key (Admin API)** | Used for server-side API calls in Test mode|
 | **Sandbox / Test Mode** | Sandbox or Production mode |
 
+## Updating to 0.27.2
+
+No new settings.
+
+- WordPress admin shows an error notice when ChargX can't confirm payments: the Secret API Key is missing or rejected, or the payment webhook isn't registered. Until it's fixed, paid orders stay "Pending payment".
+- The "Finalizing your order…" popup checks the order status with a `POST` request that page caches (e.g. Cloudflare "Cache Everything") don't store. Before, a cached "not paid yet" answer could keep the popup open forever.
+- The popup stops after 4 minutes and tells the customer they'll get an email once the order is confirmed.
+
 ## Updating to 0.27.1
 
 No new settings. Stores with a non-USD currency (e.g. GBP) can complete card orders again. ChargX charges these orders in USD, so the `payment.succeeded` check now compares the webhook's `original_amount` and `original_currency` with the checkout amount and currency. Orders in USD are checked as before.

@@ -3,7 +3,7 @@
  * Plugin Name: ChargX Payment Gateway for WooCommerce
  * Description: ChargX payment gateway for WooCommerce (Credit Cards).
  * Author: ChargX
- * Version: 0.27.1
+ * Version: 0.27.2
  * Requires at least: 5.8
  * Requires PHP: 7.4
  * WC requires at least: 4.0
@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'CHARGX_WC_VERSION', '0.27.1' );
+define( 'CHARGX_WC_VERSION', '0.27.2' );
 define( 'CHARGX_WC_PLUGIN_FILE', __FILE__ );
 define( 'CHARGX_WC_PLUGIN_PATH', plugin_dir_path( __FILE__ ) );
 define( 'CHARGX_WC_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
@@ -57,6 +57,72 @@ function chargx_wc_init() {
 
     // That hook injects JavaScript into the page footer to refresh the checkout when the payment method is changed
     add_action( 'wp_footer', 'chargx_refresh_checkout_on_payment_change' );
+
+    // Warn the merchant when paid orders cannot be confirmed by the webhook.
+    add_action( 'admin_notices', 'chargx_wc_webhook_admin_notice' );
+}
+
+/**
+ * Admin notice when the card gateway has no working webhook.
+ * Without it ChargX cannot confirm payments, so paid orders stay "Pending payment".
+ */
+function chargx_wc_webhook_admin_notice() {
+    if ( ! current_user_can( 'manage_woocommerce' ) || ! class_exists( 'ChargX_Webhook' ) ) {
+        return;
+    }
+
+    $settings = get_option( 'woocommerce_chargx_card_settings', array() );
+    if ( ! is_array( $settings ) || ! isset( $settings['enabled'] ) || 'yes' !== $settings['enabled'] ) {
+        return;
+    }
+
+    $is_test = isset( $settings['testmode'] ) && 'yes' === $settings['testmode'];
+    $mode    = $is_test ? 'test' : 'live';
+    $key     = $is_test ? 'test_secret_key' : 'secret_key';
+    $has_key = ! empty( $settings[ $key ] );
+    $error   = ChargX_Webhook::get_setup_error();
+    $notice  = ChargX_Webhook::setup_notice(
+        $mode,
+        $has_key,
+        ChargX_Webhook::is_configured_for( $mode, ChargX_Webhook::webhook_url() ),
+        $error
+    );
+    if ( '' === $notice ) {
+        return;
+    }
+
+    $key_label = $is_test
+        ? __( 'Test Secret API Key', 'chargx-woocommerce' )
+        : __( 'Live Secret API Key', 'chargx-woocommerce' );
+
+    switch ( $notice ) {
+        case 'missing_key':
+            /* translators: %s: settings field name */
+            $message = sprintf( __( 'Enter your ChargX %s and save the settings.', 'chargx-woocommerce' ), $key_label );
+            break;
+        case 'rejected_key':
+            /* translators: %s: settings field name */
+            $message = sprintf( __( 'ChargX rejected your %s. Create a new secret key in the ChargX Dashboard, paste the full key (it starts with sk_) and save the settings.', 'chargx-woocommerce' ), $key_label );
+            break;
+        case 'setup_failed':
+            /* translators: %s: error message from ChargX */
+            $message = sprintf( __( 'ChargX could not register the payment webhook: %s. Save the settings to try again.', 'chargx-woocommerce' ), isset( $error['message'] ) ? $error['message'] : '' );
+            break;
+        default:
+            $message = __( 'The ChargX payment webhook is not registered yet. Save the settings to register it.', 'chargx-woocommerce' );
+    }
+
+    $settings_url = admin_url( 'admin.php?page=wc-settings&tab=checkout&section=chargx_card' );
+    ?>
+    <div class="notice notice-error">
+        <p>
+            <strong><?php esc_html_e( 'ChargX payments are not being confirmed.', 'chargx-woocommerce' ); ?></strong>
+            <?php esc_html_e( 'Customers can pay, but their orders stay "Pending payment".', 'chargx-woocommerce' ); ?>
+            <?php echo esc_html( $message ); ?>
+            <a href="<?php echo esc_url( $settings_url ); ?>"><?php esc_html_e( 'Open ChargX settings', 'chargx-woocommerce' ); ?></a>
+        </p>
+    </div>
+    <?php
 }
 add_action( 'plugins_loaded', 'chargx_wc_init', 20 );
 add_action( 'woocommerce_init', 'chargx_maybe_ensure_webhook', 20 );
