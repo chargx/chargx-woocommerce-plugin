@@ -75,6 +75,7 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
         $configured  = ChargX_Webhook::is_configured_for( $mode, $webhook_url );
 
         if ( ! $force && $configured && ChargX_Webhook::has_events( $mode, self::WEBHOOK_EVENTS ) ) {
+            ChargX_Webhook::clear_setup_error();
             return true;
         }
 
@@ -84,7 +85,7 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
         $existing = $api->get_webhooks();
         if ( is_wp_error( $existing ) ) {
             $this->log( 'ensure_webhook get_webhooks error: ' . $existing->get_error_message(), 'error' );
-            return false;
+            return $this->webhook_setup_failed( $mode, $existing );
         }
 
         $endpoints = isset( $existing['webhook_endpoints'] ) && is_array( $existing['webhook_endpoints'] )
@@ -101,12 +102,14 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
         }
 
         if ( $match && ! empty( $match['id'] ) ) {
-            if ( ! $this->ensure_remote_webhook_events( $api, $match ) ) {
-                return false;
+            $updated = $this->ensure_remote_webhook_events( $api, $match );
+            if ( is_wp_error( $updated ) ) {
+                return $this->webhook_setup_failed( $mode, $updated );
             }
 
             if ( ! $force && $configured ) {
                 ChargX_Webhook::save_events_for_mode( $mode, self::WEBHOOK_EVENTS );
+                ChargX_Webhook::clear_setup_error();
                 $this->log( 'ensure_webhook events updated for ' . $webhook_url, 'info' );
                 return true;
             }
@@ -115,9 +118,10 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
             if ( is_wp_error( $rotated ) || empty( $rotated['secret'] ) ) {
                 $message = is_wp_error( $rotated ) ? $rotated->get_error_message() : 'missing secret';
                 $this->log( 'ensure_webhook rotate error: ' . $message, 'error' );
-                return false;
+                return $this->webhook_setup_failed( $mode, is_wp_error( $rotated ) ? $rotated : $message );
             }
             ChargX_Webhook::save_for_mode( $mode, $match['id'], $rotated['secret'], $webhook_url, self::WEBHOOK_EVENTS );
+            ChargX_Webhook::clear_setup_error();
             $this->log( 'ensure_webhook rotated secret for ' . $webhook_url, 'info' );
             return true;
         }
@@ -130,19 +134,38 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
         );
         if ( is_wp_error( $result ) ) {
             $this->log( 'ensure_webhook create error: ' . $result->get_error_message(), 'error' );
-            return false;
+            return $this->webhook_setup_failed( $mode, $result );
         }
 
         $endpoint_id = isset( $result['webhook_endpoint']['id'] ) ? $result['webhook_endpoint']['id'] : '';
         $secret      = isset( $result['secret'] ) ? $result['secret'] : '';
         if ( ! $endpoint_id || ! $secret ) {
             $this->log( 'ensure_webhook create response missing id or secret', 'error' );
-            return false;
+            return $this->webhook_setup_failed( $mode, 'missing id or secret' );
         }
 
         ChargX_Webhook::save_for_mode( $mode, $endpoint_id, $secret, $webhook_url, self::WEBHOOK_EVENTS );
+        ChargX_Webhook::clear_setup_error();
         $this->log( 'ensure_webhook created: ' . $webhook_url, 'info' );
         return true;
+    }
+
+    /**
+     * Save the registration error for the admin notice.
+     *
+     * @param string          $mode
+     * @param WP_Error|string $error
+     * @return false
+     */
+    protected function webhook_setup_failed( $mode, $error ) {
+        if ( is_wp_error( $error ) ) {
+            $data   = $error->get_error_data();
+            $status = is_array( $data ) && isset( $data['status'] ) ? (int) $data['status'] : 0;
+            ChargX_Webhook::save_setup_error( $mode, $error->get_error_message(), $status );
+        } else {
+            ChargX_Webhook::save_setup_error( $mode, (string) $error );
+        }
+        return false;
     }
 
     /**
@@ -150,7 +173,7 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
      *
      * @param ChargX_API_Client $api
      * @param array             $endpoint
-     * @return bool
+     * @return true|WP_Error
      */
     protected function ensure_remote_webhook_events( $api, $endpoint ) {
         $current = isset( $endpoint['events'] ) && is_array( $endpoint['events'] ) ? $endpoint['events'] : array();
@@ -163,7 +186,7 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
         $updated = $api->update_webhook( $endpoint['id'], $merged );
         if ( is_wp_error( $updated ) ) {
             $this->log( 'ensure_webhook update events error: ' . $updated->get_error_message(), 'error' );
-            return false;
+            return $updated;
         }
 
         $this->log( 'ensure_webhook subscribed events: ' . implode( ',', $merged ), 'info' );
@@ -624,6 +647,15 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
             return;
         }
 
+        // The poll window is over: the status endpoint would never report completion.
+        if ( ! get_transient( 'chargx_return_poll_' . $order_id ) ) {
+            if ( 'yes' === $order->get_meta( '_chargx_pending_confirm' ) ) {
+                $order->delete_meta_data( '_chargx_pending_confirm' );
+                $order->save();
+            }
+            return;
+        }
+
         self::$popup_rendered = true;
         $this->log( 'show_order_received_popup for order ' . $order_id, 'info' );
         $this->render_confirmation_popup( $order_id );
@@ -668,6 +700,13 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
                 <div class="chargx-card chargx-finalizing" id="chargx-finalizing">
                     <div class="chargx-loader" aria-hidden="true"></div>
                     <p class="chargx-finalizing-text"><?php esc_html_e( 'Finalizing your order and updating inventory...', 'chargx-woocommerce' ); ?></p>
+                </div>
+
+                <div class="chargx-card chargx-timeout" id="chargx-timeout">
+                    <p class="chargx-finalizing-text"><?php esc_html_e( 'We are still confirming your payment. You will receive an email as soon as your order is confirmed.', 'chargx-woocommerce' ); ?></p>
+                    <button type="button" class="chargx-confirm-btn" id="chargx-timeout-close">
+                        <?php esc_html_e( 'Close', 'chargx-woocommerce' ); ?>
+                    </button>
                 </div>
             </div>
         </div>
@@ -788,6 +827,9 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
 
             .chargx-overlay .chargx-finalizing { display: none; }
             .chargx-overlay .chargx-finalizing.is-active { display: block; }
+            .chargx-overlay .chargx-timeout { display: none; }
+            .chargx-overlay .chargx-timeout.is-active { display: block; }
+            .chargx-overlay .chargx-timeout .chargx-finalizing-text { margin-bottom: 1.5rem; }
             .chargx-overlay .chargx-confirm { display: block; }
             .chargx-overlay .chargx-confirm.is-hidden { display: none; }
 
@@ -824,6 +866,10 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
             (function() {
                 var statusUrl = <?php echo wp_json_encode( $status_url ); ?>;
                 var pollInterval = 2000;
+                // Stop before the server-side poll window (5 minutes) closes.
+                var pollTimeout = 4 * 60 * 1000;
+                var pollTimer = null;
+                var pollStartedAt = 0;
                 var countdownTotal = 5;
                 var countdownSeconds = countdownTotal;
                 var confirmed = false;
@@ -835,6 +881,8 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
                 var confirmBtn = document.getElementById('chargx-confirm-btn');
                 var countdownEl = document.getElementById('chargx-countdown');
                 var countdownBar = document.getElementById('chargx-countdown-bar');
+                var timeoutSection = document.getElementById('chargx-timeout');
+                var timeoutCloseBtn = document.getElementById('chargx-timeout-close');
 
                 document.body.classList.add('chargx-confirm-open');
 
@@ -849,11 +897,35 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
                     window.location.replace(url.toString());
                 }
 
+                function closeOverlay() {
+                    overlay.parentNode.removeChild(overlay);
+                    document.body.classList.remove('chargx-confirm-open');
+                }
+
+                function stopPolling() {
+                    if (pollTimer) {
+                        clearInterval(pollTimer);
+                        pollTimer = null;
+                    }
+                }
+
+                function showTimeout() {
+                    stopPolling();
+                    finalizingSection.classList.remove('is-active');
+                    timeoutSection.classList.add('is-active');
+                }
+
                 function checkStatus() {
-                    fetch(statusUrl)
+                    if (Date.now() - pollStartedAt > pollTimeout) {
+                        showTimeout();
+                        return;
+                    }
+                    // POST + no-store: page caches (e.g. Cloudflare "Cache Everything") must not answer for the order.
+                    fetch(statusUrl, { method: 'POST', cache: 'no-store', credentials: 'same-origin' })
                         .then(function(r) { return r.json(); })
                         .then(function(data) {
                             if (data.completed || data.failed) {
+                                stopPolling();
                                 refreshThankYouPage();
                             }
                         })
@@ -863,8 +935,9 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
                 }
 
                 function startPolling() {
+                    pollStartedAt = Date.now();
                     checkStatus();
-                    setInterval(checkStatus, pollInterval);
+                    pollTimer = setInterval(checkStatus, pollInterval);
                 }
 
                 function confirmTransaction() {
@@ -895,6 +968,7 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
                 }, 1000);
 
                 confirmBtn.addEventListener('click', confirmTransaction);
+                timeoutCloseBtn.addEventListener('click', closeOverlay);
             })();
         </script>
         <?php
@@ -904,6 +978,7 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
      * AJAX handler: returns order status for the confirmation popup poll.
      */
     public function ajax_order_status() {
+        nocache_headers();
         $order_id = absint( $_GET['order_id'] ?? 0 );
         if ( ! $order_id ) {
             wp_send_json( array( 'completed' => false, 'status' => '' ) );

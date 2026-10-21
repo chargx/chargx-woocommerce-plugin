@@ -13,6 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 class ChargX_Webhook {
 
     const OPTION_KEY           = 'chargx_wc_webhooks';
+    const SETUP_ERROR_KEY      = 'chargx_wc_webhook_setup_error';
     const TIMESTAMP_TOLERANCE  = 300;
     const SUCCESS_URL_ENDPOINT = 'wc_gateway_chargx_card_success_url';
     const WEBHOOK_ENDPOINT     = 'wc_gateway_chargx_card_success_url_webhook';
@@ -127,6 +128,62 @@ class ChargX_Webhook {
     public static function is_configured_for( $mode, $url ) {
         $row = self::get_for_mode( $mode );
         return ! empty( $row['secret'] ) && ! empty( $row['id'] ) && isset( $row['url'] ) && $row['url'] === $url;
+    }
+
+    /**
+     * Remember why the last webhook registration failed, so the admin can see it.
+     *
+     * @param string $mode    test|live
+     * @param string $message Error message from the ChargX API or the plugin
+     * @param int    $status  HTTP status, 0 when the request never got a response
+     */
+    public static function save_setup_error( $mode, $message, $status = 0 ) {
+        update_option(
+            self::SETUP_ERROR_KEY,
+            array(
+                'mode'    => (string) $mode,
+                'message' => (string) $message,
+                'status'  => (int) $status,
+                'time'    => time(),
+            ),
+            false
+        );
+    }
+
+    public static function clear_setup_error() {
+        delete_option( self::SETUP_ERROR_KEY );
+    }
+
+    /**
+     * @return array{mode?: string, message?: string, status?: int, time?: int}
+     */
+    public static function get_setup_error() {
+        $error = get_option( self::SETUP_ERROR_KEY, array() );
+        return is_array( $error ) ? $error : array();
+    }
+
+    /**
+     * Which admin notice the store needs, or '' when payments will be confirmed.
+     *
+     * @param string $mode          test|live
+     * @param bool   $has_key       Secret API key is set for this mode
+     * @param bool   $configured    A signing secret is stored for the current webhook URL
+     * @param array  $setup_error   Last saved registration error
+     * @return string missing_key|rejected_key|setup_failed|not_registered|''
+     */
+    public static function setup_notice( $mode, $has_key, $configured, $setup_error ) {
+        if ( ! $has_key ) {
+            return 'missing_key';
+        }
+        $error_mode = isset( $setup_error['mode'] ) ? $setup_error['mode'] : '';
+        if ( $error_mode === $mode ) {
+            $status = isset( $setup_error['status'] ) ? (int) $setup_error['status'] : 0;
+            return in_array( $status, array( 401, 403 ), true ) ? 'rejected_key' : 'setup_failed';
+        }
+        if ( ! $configured ) {
+            return 'not_registered';
+        }
+        return '';
     }
 
     /**
