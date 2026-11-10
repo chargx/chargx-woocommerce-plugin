@@ -42,43 +42,48 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
         $this->log( 'process_admin_options', 'info' );
 
         parent::process_admin_options();
+        $this->load_settings();
 
-        $secret_key = $this->get_option('secret_key');
-        $test_secret_key = $this->get_option('test_secret_key');
-
-        if (!$secret_key && !$test_secret_key) {
-            $this->log( 'process_admin_options ignore because no secret key defined', 'info' );
-            return;
-        }
-
-        $this->ensure_webhook( false );
+        $this->ensure_webhook( false, true );
     }
 
     /**
      * Register the ChargX webhook and persist the one-time signing secret.
      *
-     * Existing endpoints created by older plugin versions have no stored secret,
-     * so we rotate the secret and keep the new value locally.
+     * The stored endpoint is reused while the webhook URL, the Secret API key, and
+     * the events match. Otherwise the endpoint is looked up in the store that owns
+     * the current Secret API key and created there when missing. A disabled endpoint
+     * is enabled again whenever it is looked up.
      *
-     * @param bool $force When true (settings save), rotate if the endpoint already exists.
+     * @param bool $force  Re-register even when the stored endpoint matches.
+     * @param bool $verify Look the endpoint up even when the stored one matches, so a
+     *                     settings save repairs an endpoint ChargX disabled or deleted.
+     *                     Storefront requests skip this to avoid an API call per page.
      * @return bool
      */
-    public function ensure_webhook( $force = false ) {
-        $secret_key      = $this->get_option( 'secret_key' );
-        $test_secret_key = $this->get_option( 'test_secret_key' );
-        if ( ! $secret_key && ! $test_secret_key ) {
+    public function ensure_webhook( $force = false, $verify = false ) {
+        $mode       = ( 'yes' === $this->testmode ) ? 'test' : 'live';
+        $secret_key = $this->get_secret_key();
+        if ( '' === $secret_key ) {
+            $this->log( 'ensure_webhook skipped: no Secret API key for ' . $mode . ' mode', 'info' );
             return false;
         }
 
-        $mode        = ( 'yes' === $this->testmode ) ? 'test' : 'live';
-        $webhook_url = ChargX_Webhook::webhook_url();
-        $configured  = ChargX_Webhook::is_configured_for( $mode, $webhook_url );
+        $webhook_url     = ChargX_Webhook::webhook_url();
+        $key_fingerprint = ChargX_Webhook::key_fingerprint( $secret_key );
+        $stored          = ChargX_Webhook::get_for_mode( $mode );
+        $reason          = $force
+            ? 'forced'
+            : ChargX_Webhook::reregister_reason( $mode, $webhook_url, $key_fingerprint, self::WEBHOOK_EVENTS );
 
-        if ( ! $force && $configured && ChargX_Webhook::has_events( $mode, self::WEBHOOK_EVENTS ) ) {
-            return true;
+        if ( '' === $reason ) {
+            if ( ! $verify ) {
+                return true;
+            }
+            $reason = 'settings saved';
         }
 
-        $this->log( 'ensure_webhook mode=' . $mode, 'info' );
+        $this->log( 'ensure_webhook mode=' . $mode . ' reason=' . $reason, 'info' );
 
         $api      = $this->get_api_client();
         $existing = $api->get_webhooks();
@@ -101,24 +106,29 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
         }
 
         if ( $match && ! empty( $match['id'] ) ) {
-            if ( ! $this->ensure_remote_webhook_events( $api, $match ) ) {
+            if ( ! $this->ensure_remote_webhook_state( $api, $match ) ) {
                 return false;
             }
 
-            if ( ! $force && $configured ) {
-                ChargX_Webhook::save_events_for_mode( $mode, self::WEBHOOK_EVENTS );
-                $this->log( 'ensure_webhook events updated for ' . $webhook_url, 'info' );
+            // Endpoint ids are unique, so finding the stored id with the current key
+            // means the key belongs to the same store and the stored secret still applies.
+            $stored_id = isset( $stored['id'] ) ? (string) $stored['id'] : '';
+            if ( ! $force && ! empty( $stored['secret'] ) && $stored_id === (string) $match['id'] ) {
+                ChargX_Webhook::save_for_mode( $mode, $match['id'], $stored['secret'], $webhook_url, self::WEBHOOK_EVENTS, $key_fingerprint );
+                $this->log( 'ensure_webhook kept endpoint ' . $match['id'] . ' and its secret', 'info' );
                 return true;
             }
 
+            // The signing secret is returned only on create or rotate, so an existing
+            // endpoint this site has no secret for needs a new one.
             $rotated = $api->rotate_webhook_secret( $match['id'] );
             if ( is_wp_error( $rotated ) || empty( $rotated['secret'] ) ) {
                 $message = is_wp_error( $rotated ) ? $rotated->get_error_message() : 'missing secret';
                 $this->log( 'ensure_webhook rotate error: ' . $message, 'error' );
                 return false;
             }
-            ChargX_Webhook::save_for_mode( $mode, $match['id'], $rotated['secret'], $webhook_url, self::WEBHOOK_EVENTS );
-            $this->log( 'ensure_webhook rotated secret for ' . $webhook_url, 'info' );
+            ChargX_Webhook::save_for_mode( $mode, $match['id'], $rotated['secret'], $webhook_url, self::WEBHOOK_EVENTS, $key_fingerprint );
+            $this->log( 'ensure_webhook rotated secret for endpoint ' . $match['id'], 'info' );
             return true;
         }
 
@@ -140,33 +150,46 @@ class WC_Gateway_ChargX_Card extends WC_Gateway_ChargX_Base {
             return false;
         }
 
-        ChargX_Webhook::save_for_mode( $mode, $endpoint_id, $secret, $webhook_url, self::WEBHOOK_EVENTS );
-        $this->log( 'ensure_webhook created: ' . $webhook_url, 'info' );
+        ChargX_Webhook::save_for_mode( $mode, $endpoint_id, $secret, $webhook_url, self::WEBHOOK_EVENTS, $key_fingerprint );
+        $this->log( 'ensure_webhook created endpoint ' . $endpoint_id . ' for ' . $webhook_url, 'info' );
         return true;
     }
 
     /**
-     * Subscribe an existing ChargX endpoint to payment.failed without dropping other events.
+     * Subscribe an existing ChargX endpoint to the required events without dropping
+     * other events, and enable it again if ChargX disabled it after failed deliveries.
      *
      * @param ChargX_API_Client $api
      * @param array             $endpoint
      * @return bool
      */
-    protected function ensure_remote_webhook_events( $api, $endpoint ) {
+    protected function ensure_remote_webhook_state( $api, $endpoint ) {
+        $fields = array();
+
         $current = isset( $endpoint['events'] ) && is_array( $endpoint['events'] ) ? $endpoint['events'] : array();
-        $missing = array_diff( self::WEBHOOK_EVENTS, $current );
-        if ( empty( $missing ) ) {
+        if ( array_diff( self::WEBHOOK_EVENTS, $current ) ) {
+            $fields['events'] = array_values( array_unique( array_merge( $current, self::WEBHOOK_EVENTS ) ) );
+        }
+        // ChargX disables an endpoint after 8 failed attempts or 24 hours and never enables it again.
+        if ( isset( $endpoint['enabled'] ) && false === $endpoint['enabled'] ) {
+            $fields['enabled'] = true;
+        }
+        if ( empty( $fields ) ) {
             return true;
         }
 
-        $merged  = array_values( array_unique( array_merge( $current, self::WEBHOOK_EVENTS ) ) );
-        $updated = $api->update_webhook( $endpoint['id'], $merged );
+        $updated = $api->update_webhook( $endpoint['id'], $fields );
         if ( is_wp_error( $updated ) ) {
-            $this->log( 'ensure_webhook update events error: ' . $updated->get_error_message(), 'error' );
+            $this->log( 'ensure_webhook update endpoint error: ' . $updated->get_error_message(), 'error' );
             return false;
         }
 
-        $this->log( 'ensure_webhook subscribed events: ' . implode( ',', $merged ), 'info' );
+        if ( isset( $fields['events'] ) ) {
+            $this->log( 'ensure_webhook subscribed events: ' . implode( ',', $fields['events'] ), 'info' );
+        }
+        if ( isset( $fields['enabled'] ) ) {
+            $this->log( 'ensure_webhook enabled endpoint ' . $endpoint['id'], 'info' );
+        }
         return true;
     }
 
