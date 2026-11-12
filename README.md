@@ -34,6 +34,20 @@ You'll need to provide credentials from your ChargX Dashboard:
 | **Test Secret API Key (Admin API)** | Used for server-side API calls in Test mode|
 | **Sandbox / Test Mode** | Sandbox or Production mode |
 
+## Updating to 0.27.2
+
+No new settings. The plugin now keeps the ChargX webhook in the store that matches the current Secret API key:
+
+- After you change the Secret API key and click **Save**, the webhook is registered in the store of the new key and the new signing secret is stored. Before, payments made after a key change could stay in Pending.
+- Clicking **Save** without changing keys checks the webhook in ChargX. If ChargX disabled it after failed deliveries, the plugin enables it again. If it was deleted, the plugin creates it again.
+- Switching back to a key the plugin already used reuses the same webhook, and no duplicate is created.
+
+Existing stores need no action. After the update, the next storefront request records the current key and keeps the stored signing secret.
+
+Keep only one webhook for your site's URL in each ChargX store. If the store has several webhooks with the same URL, delete the extra ones in **Settings → Webhooks** and click **Save** in WooCommerce.
+
+Events sent while the webhook was disabled are not delivered again. Update those orders manually.
+
 ## Updating to 0.27.1
 
 No new settings. Stores with a non-USD currency (e.g. GBP) can complete card orders again. ChargX charges these orders in USD, so the `payment.succeeded` check now compares the webhook's `original_amount` and `original_currency` with the checkout amount and currency. Orders in USD are checked as before.
